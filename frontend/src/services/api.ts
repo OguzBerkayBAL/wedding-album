@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API URLini tanımla
-const API_URL = 'https://backend-l33bui0im-oguzberkays-projects.vercel.app/api';
+const API_URL = 'https://wedding-album-dfzw.onrender.com/api';
 
 const api = axios.create({
     baseURL: API_URL,
