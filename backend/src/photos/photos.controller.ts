@@ -84,8 +84,11 @@ export class PhotosController {
             throw new BadRequestException('Lütfen bir fotoğraf veya video yükleyin');
         }
 
-        // Dosya yolunu oluştur
-        const imagePath = `http://localhost:3001/uploads/${file.filename}`;
+        // Dosya yolunu oluştur - Render'da çalışacak şekilde
+        const baseUrl = process.env.NODE_ENV === 'production'
+            ? 'https://wedding-album-dfzw.onrender.com'
+            : 'http://localhost:3001';
+        const imagePath = `${baseUrl}/uploads/${file.filename}`;
 
         // Video mu kontrol et
         const isVideo = file.originalname.match(/\.(mp4|webm|ogg|mov)$/) ? true : false;
@@ -114,7 +117,7 @@ export class PhotosController {
             ...createPhotoDto,
             album: albumId,
             isVideo,
-            thumbnailPath: thumbnailFilename ? `http://localhost:3001/uploads/${thumbnailFilename}` : undefined
+            thumbnailPath: thumbnailFilename ? `${baseUrl}/uploads/${thumbnailFilename}` : undefined
         }, imagePath);
     }
 
