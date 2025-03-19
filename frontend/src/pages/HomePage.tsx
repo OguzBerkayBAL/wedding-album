@@ -23,6 +23,7 @@ const HomePage: React.FC = () => {
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
+  const [showMessage, setShowMessage] = useState(false);
 
   // Fallback slider images if no photos are available
   const fallbackSliderImages = [
@@ -459,6 +460,15 @@ const HomePage: React.FC = () => {
         Fotoğraf/Video Ekle
       </button>
 
+      {/* Mesaj Butonu */}
+      <button
+        onClick={() => setShowMessage(true)}
+        className="fixed bottom-6 left-6 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white w-14 h-14 rounded-full shadow-xl hover:shadow-2xl flex items-center justify-center text-xl font-serif font-bold transition-all duration-300 hover:-translate-y-1 z-40"
+        title="Neslihan & Oğuz'dan mesaj"
+      >
+        O&N
+      </button>
+
       {/* Fotoğraf Büyütme Modal */}
       {selectedPhoto && (
         <div
@@ -524,6 +534,39 @@ const HomePage: React.FC = () => {
               <p className="text-sm text-gray-600">
                 <span className="text-xs text-gray-500">Yükleyen:</span> {selectedPhoto.name}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mesaj Modal */}
+      {showMessage && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50"
+          onClick={() => setShowMessage(false)}
+        >
+          <div
+            className="relative max-w-md mx-auto bg-white rounded-2xl p-8 shadow-2xl transform transition-all duration-300 animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowMessage(false)}
+              className="absolute top-3 right-3 bg-white/80 text-gray-800 w-8 h-8 rounded-full flex items-center justify-center font-bold hover:bg-pink-100 transition-colors"
+            >
+              ×
+            </button>
+
+            <div className="mb-4">
+              <div className="w-20 h-1 bg-pink-500 rounded-full mx-auto mb-6"></div>
+              <h3 className="text-2xl font-serif text-center text-gray-800 mb-4">Sevgili Seda & Ömer,</h3>
+            </div>
+
+            <p className="text-gray-700 leading-relaxed text-center">
+              Bu mutlu gününüzde yanınızda olamasak da, kalbimiz ve en güzel dileklerimiz sizinle! Sevginizi ve bu özel anınızı kutlamak için sizlere küçük bir hediye olarak bu siteyi hazırladık. Bir ömür boyu sürecek mutluluk, sağlık ve huzur diliyoruz. Gönlünüzden geçen tüm güzellikler hayatınıza eşlik etsin. Sizleri sevgiyle kucaklıyoruz!
+            </p>
+
+            <div className="mt-6 text-right text-pink-600 font-medium">
+              Neslihan & Oğuz
             </div>
           </div>
         </div>
