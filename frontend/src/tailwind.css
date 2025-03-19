@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Kalplerin düşme animasyonu */
+@keyframes fall {
+    0% {
+        transform: translateY(0) rotate(45deg) scale(1);
+    }
+
+    50% {
+        transform: translateY(50vh) rotate(90deg) scale(0.8) translateX(20px);
+    }
+
+    100% {
+        transform: translateY(100vh) rotate(135deg) scale(0.6) translateX(-20px);
+    }
+}
+
+.animate-fall {
+    animation-name: fall;
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: forwards;
+}

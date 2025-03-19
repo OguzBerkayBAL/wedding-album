@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans text-gray-800 bg-gray-50;
+  }
+}
+
+@layer components {
+  .container-custom {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+}
+
+@layer utilities {
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari, Opera */
+  }
+}
+
+/* Kalplerin düşme animasyonu */
+@keyframes fall {
+  0% {
+    transform: translateY(0) rotate(45deg) scale(1);
+  }
+
+  50% {
+    transform: translateY(50vh) rotate(90deg) scale(0.8) translateX(20px);
+  }
+
+  100% {
+    transform: translateY(100vh) rotate(135deg) scale(0.6) translateX(-20px);
+  }
+}
+
+.animate-fall {
+  animation-name: fall;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: forwards;
+}
