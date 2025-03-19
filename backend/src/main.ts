@@ -16,9 +16,12 @@ async function bootstrap() {
 
   // CORS ayarları
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3002'],
+    origin: ['http://localhost:3000', 'http://localhost:3002', 'https://frontend-iwc82e2ki-oguzberkays-projects.vercel.app', 'https://wedding-album-frontend.vercel.app'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
+    allowedHeaders: 'Content-Type,Authorization,X-Requested-With',
+    exposedHeaders: 'Content-Range,X-Total-Count',
+    maxAge: 3600,
   });
 
   // API prefix
