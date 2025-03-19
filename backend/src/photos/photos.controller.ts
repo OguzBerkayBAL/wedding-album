@@ -52,31 +52,29 @@ export class PhotosController {
     }
 
     @Post('albums/:albumId/photos')
-    @UseInterceptors(
-        FileInterceptor('photo', {
-            storage: diskStorage({
-                destination: './uploads',
-                filename: (req, file, cb) => {
-                    // Unique isim oluşturma
-                    const randomName = Array(32)
-                        .fill(null)
-                        .map(() => Math.round(Math.random() * 16).toString(16))
-                        .join('');
-                    return cb(null, `${randomName}${extname(file.originalname)}`);
-                },
-            }),
-            fileFilter: (req, file, cb) => {
-                // Resim ve video dosyalarına izin ver
-                if (!file.originalname.match(/\.(jpg|jpeg|png|gif|mp4|webm|ogg|mov)$/)) {
-                    return cb(new BadRequestException('Sadece resim ve video dosyaları yüklenebilir'), false);
-                }
-                cb(null, true);
-            },
-            limits: {
-                fileSize: 60 * 1024 * 1024, // 60 MB limit
+    @UseInterceptors(FileInterceptor('photo', {
+        storage: diskStorage({
+            destination: './uploads',
+            filename: (req, file, cb) => {
+                // Unique isim oluşturma
+                const randomName = Array(32)
+                    .fill(null)
+                    .map(() => Math.round(Math.random() * 16).toString(16))
+                    .join('');
+                return cb(null, `${randomName}${extname(file.originalname)}`);
             },
         }),
-    )
+        fileFilter: (req, file, cb) => {
+            // Resim ve video dosyalarına izin ver
+            if (!file.originalname.match(/\.(jpg|jpeg|png|gif|mp4|webm|ogg|mov)$/)) {
+                return cb(new BadRequestException('Sadece resim ve video dosyaları yüklenebilir'), false);
+            }
+            cb(null, true);
+        },
+        limits: {
+            fileSize: 60 * 1024 * 1024, // 60 MB limit
+        },
+    }))
     async uploadPhoto(
         @Param('albumId') albumId: string,
         @Body() createPhotoDto: CreatePhotoDto,
