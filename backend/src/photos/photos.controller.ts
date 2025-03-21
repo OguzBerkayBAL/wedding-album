@@ -10,7 +10,8 @@ import {
     BadRequestException,
     Res,
     InternalServerErrorException,
-    StreamableFile
+    StreamableFile,
+    Logger
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -38,9 +39,28 @@ interface MulterFile {
 
 @Controller()
 export class PhotosController {
-    constructor(private readonly photosService: PhotosService) { }
+    private readonly logger = new Logger(PhotosController.name);
+
+    constructor(private readonly photosService: PhotosService) {
+        // Uploads klasörünün varlığını kontrol et
+        const uploadsDir = join(process.cwd(), 'uploads');
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+            this.logger.log(`Uploads klasörü oluşturuldu: ${uploadsDir}`);
+        } else {
+            this.logger.log(`Uploads klasörü mevcut: ${uploadsDir}`);
+            // İzinleri kontrol et
+            try {
+                fs.accessSync(uploadsDir, fs.constants.W_OK);
+                this.logger.log('Uploads klasörüne yazma izni var');
+            } catch (err) {
+                this.logger.error(`Uploads klasörüne yazma izni yok: ${err.message}`);
+            }
+        }
+    }
 
     private async generateThumbnail(videoPath: string, thumbnailPath: string): Promise<void> {
+        this.logger.log(`Video önizleme oluşturuluyor: ${videoPath} -> ${thumbnailPath}`);
         return new Promise((resolve, reject) => {
             ffmpeg(videoPath)
                 .screenshots({
@@ -49,8 +69,14 @@ export class PhotosController {
                     folder: './uploads',
                     size: '320x240'
                 })
-                .on('end', () => resolve())
-                .on('error', (err) => reject(err));
+                .on('end', () => {
+                    this.logger.log('Video önizleme oluşturuldu');
+                    resolve();
+                })
+                .on('error', (err) => {
+                    this.logger.error(`Video önizleme oluşturma hatası: ${err.message}`);
+                    reject(err);
+                });
         });
     }
 
@@ -60,6 +86,7 @@ export class PhotosController {
             await fs.promises.access(filePath, fs.constants.F_OK);
             return true;
         } catch (error) {
+            this.logger.error(`Dosya bulunamadı: ${filePath}, hata: ${error.message}`);
             return false;
         }
     }
@@ -67,14 +94,27 @@ export class PhotosController {
     @Post('albums/:albumId/photos')
     @UseInterceptors(FileInterceptor('photo', {
         storage: diskStorage({
-            destination: './uploads',
+            destination: (req, file, cb) => {
+                const uploadPath = join(process.cwd(), 'uploads');
+                this.logger.log(`Dosya yükleme klasörü: ${uploadPath}`);
+
+                // Klasör varlığını kontrol et
+                if (!fs.existsSync(uploadPath)) {
+                    this.logger.log(`Uploads klasörü bulunamadı, oluşturuluyor: ${uploadPath}`);
+                    fs.mkdirSync(uploadPath, { recursive: true });
+                }
+
+                cb(null, uploadPath);
+            },
             filename: (req, file, cb) => {
                 // Unique isim oluşturma
                 const randomName = Array(32)
                     .fill(null)
                     .map(() => Math.round(Math.random() * 16).toString(16))
                     .join('');
-                return cb(null, `${randomName}${extname(file.originalname)}`);
+                const fileName = `${randomName}${extname(file.originalname)}`;
+                this.logger.log(`Oluşturulan dosya adı: ${fileName}`);
+                return cb(null, fileName);
             },
         }),
         fileFilter: (req, file, cb) => {
@@ -82,6 +122,7 @@ export class PhotosController {
             if (!file.originalname.match(/\.(jpg|jpeg|png|gif|mp4|webm|ogg|mov)$/)) {
                 return cb(new BadRequestException('Sadece resim ve video dosyaları yüklenebilir'), false);
             }
+            this.logger.log(`Dosya kabul edildi: ${file.originalname}, mimetype: ${file.mimetype}`);
             cb(null, true);
         },
         limits: {
@@ -91,17 +132,20 @@ export class PhotosController {
     async uploadPhoto(
         @Param('albumId') albumId: string,
         @Body() createPhotoDto: CreatePhotoDto,
-        @UploadedFile() file: MulterFile,
+        @UploadedFile() file: Express.Multer.File,
     ): Promise<Photo> {
         if (!file) {
             throw new BadRequestException('Lütfen bir fotoğraf veya video yükleyin');
         }
 
         try {
+            this.logger.log(`Dosya yüklendi: ${file.originalname}, ${file.mimetype}, ${file.size} bytes`);
+            this.logger.log(`Dosya dizini: ${file.destination}, dosya yolu: ${file.path}`);
+
             // Dosyanın gerçekten var olduğundan emin olalım
             const fileExists = await this.ensureFileExists(file.path);
             if (!fileExists) {
-                throw new BadRequestException('Dosya yüklenirken bir sorun oluştu');
+                throw new BadRequestException('Dosya yüklenirken bir sorun oluştu, dosya bulunamadı');
             }
 
             // Dosya yolunu oluştur - Render'da çalışacak şekilde
@@ -122,12 +166,12 @@ export class PhotosController {
                 // Dosya boyutu 40MB'dan küçükse veritabanına kaydet
                 if (fileSizeInMB <= 40) {
                     imageData = await fs.promises.readFile(file.path);
-                    console.log(`Dosya (${fileSizeInMB.toFixed(2)}MB) veritabanına kaydedilecek`);
+                    this.logger.log(`Dosya (${fileSizeInMB.toFixed(2)}MB) veritabanına kaydedilecek`);
                 } else {
-                    console.log(`Dosya çok büyük (${fileSizeInMB.toFixed(2)}MB), sadece dosya sisteminde saklanacak`);
+                    this.logger.log(`Dosya çok büyük (${fileSizeInMB.toFixed(2)}MB), sadece dosya sisteminde saklanacak`);
                 }
             } catch (error) {
-                console.error('Dosya okuma hatası:', error);
+                this.logger.error(`Dosya okuma hatası: ${error.message}`);
             }
 
             // Eğer video ise önizleme görüntüsü oluştur
@@ -137,7 +181,7 @@ export class PhotosController {
                 try {
                     thumbnailFilename = `thumb_${file.filename.split('.')[0]}.jpg`;
                     await this.generateThumbnail(file.path, thumbnailFilename);
-                    console.log('Video önizleme oluşturuldu:', thumbnailFilename);
+                    this.logger.log('Video önizleme oluşturuldu:', thumbnailFilename);
 
                     // Thumbnail içeriğini oku
                     const thumbnailPath = path.join('./uploads', thumbnailFilename);
@@ -145,20 +189,9 @@ export class PhotosController {
                         thumbnailData = await fs.promises.readFile(thumbnailPath);
                     }
                 } catch (error) {
-                    console.error('Video önizleme oluşturma hatası:', error);
+                    this.logger.error(`Video önizleme oluşturma hatası: ${error.message}`);
                 }
             }
-
-            console.log('Yüklenen dosya:', {
-                dosya_adi: file.originalname,
-                mime_type: file.mimetype,
-                is_video: isVideo,
-                dosya_boyutu: file.size,
-                dosya_yolu: file.path,
-                url: imagePath,
-                thumbnail: thumbnailFilename,
-                veritabaninda_saklanacak: imageData !== undefined
-            });
 
             // Yüklenen dosyayı verilen izinleri kontrol edelim ve düzeltelim
             try {
@@ -170,8 +203,10 @@ export class PhotosController {
                     }
                 }
             } catch (error) {
-                console.error('Dosya izinleri ayarlanırken hata:', error);
+                this.logger.error(`Dosya izinleri ayarlanırken hata: ${error.message}`);
             }
+
+            this.logger.log(`PhotosService.create çağrılıyor: ${albumId}, ${imagePath}`);
 
             return this.photosService.create({
                 ...createPhotoDto,
@@ -180,7 +215,7 @@ export class PhotosController {
                 thumbnailPath: thumbnailFilename ? `${baseUrl}/uploads/${thumbnailFilename}` : undefined
             }, imagePath, imageData, thumbnailData, file.mimetype);
         } catch (error) {
-            console.error('Dosya yükleme hatası:', error);
+            this.logger.error(`Dosya yükleme hatası: ${error.message}`);
             throw new InternalServerErrorException('Dosya yüklenirken bir sorun oluştu');
         }
     }
