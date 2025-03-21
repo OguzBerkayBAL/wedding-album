@@ -94,18 +94,7 @@ export class PhotosController {
     @Post('albums/:albumId/photos')
     @UseInterceptors(FileInterceptor('photo', {
         storage: diskStorage({
-            destination: (req, file, cb) => {
-                const uploadPath = join(process.cwd(), 'uploads');
-                this.logger.log(`Dosya yükleme klasörü: ${uploadPath}`);
-
-                // Klasör varlığını kontrol et
-                if (!fs.existsSync(uploadPath)) {
-                    this.logger.log(`Uploads klasörü bulunamadı, oluşturuluyor: ${uploadPath}`);
-                    fs.mkdirSync(uploadPath, { recursive: true });
-                }
-
-                cb(null, uploadPath);
-            },
+            destination: './uploads',
             filename: (req, file, cb) => {
                 // Unique isim oluşturma
                 const randomName = Array(32)
@@ -113,7 +102,7 @@ export class PhotosController {
                     .map(() => Math.round(Math.random() * 16).toString(16))
                     .join('');
                 const fileName = `${randomName}${extname(file.originalname)}`;
-                this.logger.log(`Oluşturulan dosya adı: ${fileName}`);
+                console.log(`Oluşturulan dosya adı: ${fileName}`);
                 return cb(null, fileName);
             },
         }),
@@ -122,7 +111,7 @@ export class PhotosController {
             if (!file.originalname.match(/\.(jpg|jpeg|png|gif|mp4|webm|ogg|mov)$/)) {
                 return cb(new BadRequestException('Sadece resim ve video dosyaları yüklenebilir'), false);
             }
-            this.logger.log(`Dosya kabul edildi: ${file.originalname}, mimetype: ${file.mimetype}`);
+            console.log(`Dosya kabul edildi: ${file.originalname}, mimetype: ${file.mimetype}`);
             cb(null, true);
         },
         limits: {
@@ -146,6 +135,13 @@ export class PhotosController {
             const fileExists = await this.ensureFileExists(file.path);
             if (!fileExists) {
                 throw new BadRequestException('Dosya yüklenirken bir sorun oluştu, dosya bulunamadı');
+            }
+
+            // Uploads klasörünün varlığını kontrol et ve izinleri düzelt
+            const uploadsDir = join(process.cwd(), 'uploads');
+            if (!fs.existsSync(uploadsDir)) {
+                fs.mkdirSync(uploadsDir, { recursive: true });
+                this.logger.log(`Uploads klasörü oluşturuldu: ${uploadsDir}`);
             }
 
             // Dosya yolunu oluştur - Render'da çalışacak şekilde
