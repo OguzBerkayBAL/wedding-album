@@ -47,7 +47,11 @@ const PhotoModal: React.FC<PhotoModalProps> = ({ photo, isOpen, onClose, onDelet
 
     // Silme işlemi
     const handleDelete = async () => {
-        if (!photo._id) return;
+        if (!photo._id) {
+            console.error('Silinecek fotoğrafın ID değeri yok');
+            onClose();
+            return;
+        }
 
         try {
             setIsDeleting(true);
@@ -66,6 +70,9 @@ const PhotoModal: React.FC<PhotoModalProps> = ({ photo, isOpen, onClose, onDelet
             setConfirmDelete(false);
         }
     };
+
+    // Fotoğrafın silme butonunun görünürlüğü
+    const canDelete = Boolean(photo._id) && Boolean(onDelete);
 
     return (
         <div
@@ -145,7 +152,7 @@ const PhotoModal: React.FC<PhotoModalProps> = ({ photo, isOpen, onClose, onDelet
                     )}
 
                     {/* Silme işlemi */}
-                    {onDelete && (
+                    {canDelete && (
                         <div className="mt-6 border-t pt-4">
                             {confirmDelete ? (
                                 <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">

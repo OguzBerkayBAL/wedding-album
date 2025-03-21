@@ -19,7 +19,8 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({ photos, onPhotoDeleted }) => {
   };
 
   // Yükleme hatası olan görselleri işaretle
-  const handleImageError = (photoId: string) => {
+  const handleImageError = (photoId: string | undefined) => {
+    if (!photoId) return;
     console.error(`Fotoğraf yükleme hatası: ${photoId}`);
     setErrorImages(prev => new Set(prev).add(photoId));
   };
@@ -44,7 +45,7 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({ photos, onPhotoDeleted }) => {
   }
 
   // Hatasız fotoğrafları filtrele
-  const validPhotos = photos.filter(photo => !errorImages.has(photo._id));
+  const validPhotos = photos.filter(photo => !photo._id || !errorImages.has(photo._id));
 
   return (
     <div>
@@ -53,7 +54,7 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({ photos, onPhotoDeleted }) => {
           const isVideoFile = isVideo(photo.photoPath);
           return (
             <div
-              key={photo._id}
+              key={photo._id || `photo-${Math.random()}`}
               className="relative overflow-hidden rounded-lg shadow-sm group hover:shadow-md transition-all cursor-pointer aspect-[3/4]"
               onClick={() => openPhoto(photo)}
             >
