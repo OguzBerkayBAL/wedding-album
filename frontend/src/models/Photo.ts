@@ -1,9 +1,9 @@
 export interface Photo {
     _id?: string;
-    title: string;
-    imagePath: string;
+    albumId: string;
     name: string;
-    caption?: string;
-    isVideo?: boolean;
-    createdAt?: Date;
+    title?: string;
+    photoPath: string;
+    createdAt?: string;
+    updatedAt?: string;
 } 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { photoService } from '../services/photoService';
 
 interface PhotoUploadProps {
@@ -17,9 +17,14 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
+  // Fotoğraf seçme
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
+      setErrorMessage(null);  // Her yeni dosya seçildiğinde hata mesajını temizle
+
       const selectedFiles = Array.from(e.target.files);
+      console.log(`${selectedFiles.length} adet dosya seçildi`);
+
       setFiles(selectedFiles);
 
       // Dosya önizlemelerini oluştur
@@ -48,8 +53,18 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!albumId) {
+      setErrorMessage('Albüm ID bilgisi eksik');
+      return;
+    }
+
     if (files.length === 0) {
       setErrorMessage('Lütfen en az bir fotoğraf veya video yükleyin');
+      return;
+    }
+
+    if (!name.trim()) {
+      setErrorMessage('Lütfen adınızı girin');
       return;
     }
 
@@ -57,6 +72,8 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
       setIsUploading(true);
       setErrorMessage(null);
       setUploadProgress(0);
+
+      console.log(`${files.length} dosya yükleniyor, albüm ID: ${albumId}`);
 
       // Tüm dosyaları sırayla yükle
       for (let i = 0; i < files.length; i++) {
@@ -67,7 +84,17 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
         formData.append('photo', file);
         formData.append('albumId', albumId);
 
-        await photoService.uploadPhoto(formData);
+        console.log(`${i + 1}/${files.length} dosya yükleniyor: ${file.name} (${Math.round(file.size / 1024)}KB)`);
+
+        try {
+          await photoService.uploadPhoto(formData, (progress) => {
+            setUploadProgress(progress);
+          });
+          console.log(`${i + 1}/${files.length} dosya başarıyla yüklendi`);
+        } catch (error) {
+          console.error(`Dosya yüklenirken hata: ${file.name}`, error);
+          throw new Error(`${file.name} dosyası yüklenirken hata oluştu`);
+        }
 
         // İlerleme durumunu güncelle
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
@@ -75,28 +102,30 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
 
       // Başarı mesajı göster
       setSuccessMessage(`${files.length} dosya başarıyla yüklendi!`);
+      console.log(`Toplam ${files.length} dosya başarıyla yüklendi`);
 
       // Yönlendirme durumunu aktif et
       setIsRedirecting(true);
 
-      // 2 saniye sonra ana sayfaya yönlendir
+      // Formu sıfırla
+      setName('');
+      setTitle('');
+      setFiles([]);
+      setPreviews([]);
+
+      // 2 saniye sonra onUploadSuccess'i çağır
       setTimeout(() => {
-        // Formu sıfırla
-        setName('');
-        setTitle('');
-        setFiles([]);
-        setPreviews([]);
-        
-        // Sayfayı yenileyerek ana sayfaya dön
-        window.location.href = '/';
+        console.log('Upload başarılı, callback çağrılıyor');
+        onUploadSuccess();
+        setIsRedirecting(false);
       }, 2000);
 
     } catch (error) {
-      console.error('Error uploading media:', error);
+      console.error('Dosya yükleme hatası:', error);
       setErrorMessage('Dosyalar yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+      setIsRedirecting(false);
     } finally {
       setIsUploading(false);
-      setUploadProgress(0);
     }
   };
 

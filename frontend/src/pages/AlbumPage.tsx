@@ -1,87 +1,145 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import Header from '../components/Header';
-import PhotoGrid from '../components/PhotoGrid';
-import PhotoUpload from '../components/PhotoUpload';
 import { Album } from '../models/Album';
 import { Photo } from '../models/Photo';
 import { albumService } from '../services/albumService';
 import { photoService } from '../services/photoService';
+import Header from '../components/Header';
+import PhotoGrid from '../components/PhotoGrid';
+import PhotoUpload from '../components/PhotoUpload';
+import { toast } from 'react-toastify';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const AlbumPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const location = useLocation();
+
   const [album, setAlbum] = useState<Album | null>(null);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUploadForm, setShowUploadForm] = useState(false);
-  const navigate = useNavigate();
 
+  // URL parametrelerinden showUpload değerini alma
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const shouldShowUpload = searchParams.get('upload') === 'true';
-    setShowUploadForm(shouldShowUpload);
-  }, [location.search]);
+    try {
+      const queryParams = new URLSearchParams(location.search);
+      const showUpload = queryParams.get('showUpload');
+      console.log('URL parametreleri:', {
+        id: id,
+        showUpload: showUpload,
+        fullURL: location.pathname + location.search
+      });
 
-  useEffect(() => {
-    const fetchAlbumAndPhotos = async () => {
-      if (!id) return;
-
-      try {
-        setLoading(true);
-        const [albumData, photosData] = await Promise.all([
-          albumService.getAlbumById(id),
-          photoService.getPhotosByAlbumId(id)
-        ]);
-        setAlbum(albumData);
-        setPhotos(photosData);
-      } catch (err) {
-        console.error('Error fetching album and photos:', err);
-        setError('Albüm ve fotoğraflar yüklenirken bir hata oluştu.');
-      } finally {
-        setLoading(false);
+      if (showUpload === 'true') {
+        setShowUploadForm(true);
       }
-    };
+    } catch (err) {
+      console.error('URL parametre hatası:', err);
+    }
+  }, [location]);
 
-    fetchAlbumAndPhotos();
+  // Album ve fotoğrafları yükleme
+  const fetchAlbumAndPhotos = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (!id) {
+        console.error('Album ID bulunamadı');
+        setError('Album bulunamadı. Lütfen anasayfaya dönün.');
+        setLoading(false);
+        return;
+      }
+
+      console.log(`Album ID: ${id} için veri yükleniyor...`);
+
+      // Album bilgilerini al
+      const albumData = await albumService.getAlbumById(id);
+      setAlbum(albumData);
+      console.log('Album yüklendi:', albumData.name);
+
+      // Album fotoğraflarını al
+      const photoData = await photoService.getPhotosByAlbumId(id);
+      setPhotos(photoData);
+      console.log(`${photoData.length} fotoğraf yüklendi`);
+
+    } catch (err: any) {
+      console.error('Album yükleme hatası:', err);
+      setError('Album yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) {
+      fetchAlbumAndPhotos();
+    }
   }, [id]);
 
-  const handleUploadSuccess = async () => {
-    // Reload photos after successful upload
-    if (id) {
-      try {
-        const updatedPhotos = await photoService.getPhotosByAlbumId(id);
-        setPhotos(updatedPhotos);
+  // Fotoğraf yükleme başarılı olduğunda
+  const handleUploadSuccess = () => {
+    console.log('Fotoğraf yükleme başarılı, albüm fotoğrafları yenileniyor');
+    // Yükleme formunu gizle
+    setShowUploadForm(false);
 
-        // Başarılı yüklemeden sonra ana sayfaya geri dön
-        navigate('/');
-      } catch (error) {
-        console.error('Error refreshing photos:', error);
-      }
+    // Fotoğrafları yeniden yükle
+    if (id) {
+      // URL'deki showUpload parametresini kaldır
+      navigate(`/album/${id}`, { replace: true });
+      // Fotoğrafları yenile
+      fetchAlbumAndPhotos();
+      // Başarılı bildirimi göster
+      toast.success('Teşekkürler! Fotoğraflar başarıyla yüklendi.', {
+        position: "top-center",
+        autoClose: 3000
+      });
     }
+  };
+
+  // Yükleme formunu göster/gizle
+  const toggleUploadForm = () => {
+    const newState = !showUploadForm;
+    setShowUploadForm(newState);
+
+    // URL'yi güncelle ama sayfayı yenileme
+    const url = new URL(window.location.href);
+    if (newState) {
+      url.searchParams.set('showUpload', 'true');
+    } else {
+      url.searchParams.delete('showUpload');
+    }
+    window.history.pushState({}, '', url.toString());
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto py-8 px-4">
+          <LoadingSpinner text="Albüm yükleniyor..." />
+        </div>
       </div>
     );
   }
 
-  if (error || !album) {
+  if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Hata</h2>
-          <p className="text-gray-600 mb-4">{error || 'Albüm bulunamadı.'}</p>
-          <button
-            onClick={() => navigate('/')}
-            className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors"
-          >
-            Ana Sayfaya Dön
-          </button>
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto py-8 px-4">
+          <div className="text-center p-8 bg-red-50 rounded-lg shadow-sm">
+            <h2 className="text-xl font-semibold text-red-700 mb-2">Hata</h2>
+            <p className="text-red-600">{error}</p>
+            <button
+              onClick={() => navigate('/')}
+              className="mt-4 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+            >
+              Anasayfaya Dön
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -89,64 +147,58 @@ const AlbumPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="Düğün Albümü" showBackButton backTo="/" />
+      <Header />
 
-      <div className="container-custom px-4 py-6">
-        {!showUploadForm && (
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 mb-1">{album.title}</h1>
-            <p className="text-lg text-gray-600 mb-1">{album.date}</p>
-            <h2 className="text-2xl font-semibold text-primary mb-3">{album.couple.name1} & {album.couple.name2}</h2>
+      <div className="container mx-auto py-6 px-4">
+        {album && (
+          <div className="mb-6">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">{album.name}</h1>
             {album.description && (
-              <p className="text-gray-700 max-w-2xl mx-auto">{album.description}</p>
+              <p className="text-gray-600">{album.description}</p>
             )}
           </div>
         )}
 
-        {!showUploadForm && (
-          <div className="bg-gray-50 border-l-4 border-primary p-5 rounded-md shadow-sm mb-8">
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">Düğünümüze Hoş Geldiniz</h3>
-            <p className="text-gray-600 leading-relaxed">
-              Değerli misafirlerimiz, düğünümüzde çektiğiniz özel anları ve fotoğraflarınızı burada paylaşabilirsiniz.
-              Sizin gözünüzden düğünümüzün nasıl göründüğünü görmek bizi çok mutlu edecek.
-              Aşağıdaki "Fotoğraf Ekle" bölümünden fotoğraflarınızı kolayca yükleyebilirsiniz.
-            </p>
-          </div>
-        )}
+        {/* Butonlar */}
+        <div className="flex justify-between mb-6">
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            ← Tüm Albümler
+          </button>
 
+          <button
+            onClick={toggleUploadForm}
+            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+          >
+            {showUploadForm ? 'Fotoğrafları Göster' : 'Fotoğraf Ekle'}
+          </button>
+        </div>
+
+        {/* Form veya Fotoğraf Gösterimi */}
         {showUploadForm ? (
-          <>
-            <h2 className="text-2xl font-bold text-center text-gray-800 mb-6 relative after:content-[''] after:absolute after:bottom-[-8px] after:left-1/2 after:transform after:-translate-x-1/2 after:w-16 after:h-1 after:bg-primary after:rounded-full">
-              Anılarınızı Paylaşın
-            </h2>
-            <PhotoUpload albumId={id || ''} onUploadSuccess={handleUploadSuccess} />
-          </>
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Yeni Fotoğraf Ekle</h2>
+            {id && <PhotoUpload albumId={id} onUploadSuccess={handleUploadSuccess} />}
+          </div>
         ) : (
-          <>
-            <h2 className="text-2xl font-bold text-center text-gray-800 mb-6 relative after:content-[''] after:absolute after:bottom-[-8px] after:left-1/2 after:transform after:-translate-x-1/2 after:w-16 after:h-1 after:bg-primary after:rounded-full">
-              Albüm Fotoğrafları
-            </h2>
-            <div className="flex justify-center mb-8">
-              <button
-                onClick={() => setShowUploadForm(true)}
-                className="flex items-center gap-2 bg-primary text-white px-5 py-3 rounded-full shadow hover:bg-primary-dark transition-all duration-200 hover:-translate-y-1 hover:shadow-md"
-              >
-                <span className="text-xl">📷</span>
-                Fotoğraf Ekle
-              </button>
-            </div>
-            <PhotoGrid photos={photos} onPhotoDeleted={async () => {
-              // Fotoğraf silindikten sonra albümdeki fotoğrafları yeniden yükle
-              if (id) {
-                try {
-                  const updatedPhotos = await photoService.getPhotosByAlbumId(id);
-                  setPhotos(updatedPhotos);
-                } catch (err) {
-                  console.error('Error refreshing photos:', err);
-                }
-              }
-            }} />
-          </>
+          <div>
+            {photos.length === 0 ? (
+              <div className="text-center p-8 bg-gray-100 rounded-lg">
+                <h2 className="text-xl font-semibold text-gray-700 mb-2">Bu albümde henüz fotoğraf yok</h2>
+                <p className="text-gray-600 mb-4">İlk fotoğrafı eklemek için "Fotoğraf Ekle" butonuna tıklayın.</p>
+                <button
+                  onClick={toggleUploadForm}
+                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+                >
+                  Fotoğraf Ekle
+                </button>
+              </div>
+            ) : (
+              <PhotoGrid photos={photos} />
+            )}
+          </div>
         )}
       </div>
     </div>
