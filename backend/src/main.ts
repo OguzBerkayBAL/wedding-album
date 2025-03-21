@@ -1,78 +1,54 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import * as express from 'express';
+import { ConfigService } from '@nestjs/config';
+import * as path from 'path';
 import { join } from 'path';
+import * as bodyParser from 'body-parser';
 import * as fs from 'fs';
 
 async function bootstrap() {
-  // Uploads klasörünün varlığını kontrol et, yoksa oluştur
-  const uploadsDir = join(process.cwd(), 'uploads');
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const configService = app.get(ConfigService);
+
+  // Uploads klasörünün varlığını kontrol et ve yoksa oluştur
+  const uploadsDir = join(__dirname, '..', 'uploads');
   if (!fs.existsSync(uploadsDir)) {
+    console.log('Uploads directory does not exist, creating:', uploadsDir);
     fs.mkdirSync(uploadsDir, { recursive: true });
-    console.log('Uploads klasörü oluşturuldu:', uploadsDir);
   }
 
-  // Çıktılar için tmp klasörü oluştur (genellikle video önizlemeleri için)
-  const tmpDir = join(process.cwd(), 'tmp');
-  if (!fs.existsSync(tmpDir)) {
-    fs.mkdirSync(tmpDir, { recursive: true });
-    console.log('Tmp klasörü oluşturuldu:', tmpDir);
-  }
+  // Dosya boyut limitini 60MB'a ayarla
+  app.use(bodyParser.json({ limit: '60mb' }));
+  app.use(bodyParser.urlencoded({ limit: '60mb', extended: true }));
 
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    bodyParser: false, // NestJS'in varsayılan body parser'ını kapatıyoruz, büyük dosyalar için
-  });
-
-  app.useGlobalPipes(new ValidationPipe());
-
-  // CORS ayarları - frontend uygulamanın adresini ekleyin
+  // CORS ayarları
   app.enableCors({
-    origin: [
+    origin: ['http://localhost:3000', 'http://localhost:3002',
+      'https://frontend-iwc82e2ki-oguzberkays-projects.vercel.app',
       'https://wedding-album-frontend.vercel.app',
-      'https://wedding-album-frontend.onrender.com',
-      'http://localhost:5173',
-      'http://localhost:3000'
-    ],
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+      'https://wedding-album.vercel.app',
+      'https://wedding-album-frontend.onrender.com'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
+    allowedHeaders: 'Content-Type,Authorization,X-Requested-With',
+    exposedHeaders: 'Content-Range,X-Total-Count',
+    maxAge: 3600,
   });
 
-  // Express dosya yükleme ve sunucu limitleri - çok büyük dosyalar için
-  app.use(express.json({ limit: '100mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '100mb' }));
-
-  // MongoDB bağlantı nesnesi boyutu limiti
-  process.env.NODE_OPTIONS = "--max-old-space-size=4096"; // 4GB bellek limiti
-  // Not: Bu tam çözüm olmayabilir, MongoDB sürücüsü için ek ayarlar gerekebilir
-
-  // Statik dosya servis ayarları
-  app.use('/uploads', express.static(join(process.cwd(), 'uploads'), {
-    maxAge: '365d',  // Tarayıcı önbellekleme süresi
-    index: false,    // Dizin listemeyi engelle
-    setHeaders: (res) => {
-      res.set('Cache-Control', 'public, max-age=31536000');
-      res.set('X-Content-Type-Options', 'nosniff');
-    }
-  }));
-
-  // Uygulama öneki
+  // API prefix
   app.setGlobalPrefix('api');
 
-  await app.listen(process.env.PORT || 3001);
-  console.log(`Uygulama şu portta çalışıyor: ${process.env.PORT || 3001}`);
-  console.log(`Uploads klasörü: ${uploadsDir}`);
-  console.log(`Dosya boyut limiti: 100MB`);
-  console.log(`CORS izinleri ayarlandı`);
-
-  // Bellek kullanımını göster
-  const memoryUsage = process.memoryUsage();
-  console.log('Bellek kullanımı:', {
-    rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
-    heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`,
-    heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
+  // Statik dosyaları servis et
+  console.log('Static files are served from', uploadsDir);
+  app.useStaticAssets(uploadsDir, {
+    prefix: '/uploads',
   });
+
+  const port = configService.get<number>('PORT', 3001);
+  await app.listen(port);
+  console.log(`Application is running on port ${port}`);
+  console.log(`Static files are served from ${uploadsDir}`);
+  console.log(`File upload limit set to 60MB`);
 }
 bootstrap();

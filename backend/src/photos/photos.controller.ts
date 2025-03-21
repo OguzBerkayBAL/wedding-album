@@ -114,7 +114,7 @@ export class PhotosController {
             const isVideo = file.originalname.match(/\.(mp4|webm|ogg|mov)$/) ? true : false;
 
             // Dosya içeriğini oku (tüm dosya tipleri için)
-            let imageData = null;
+            let imageData: Buffer | undefined = undefined;
             try {
                 const stats = await fs.promises.stat(file.path);
                 const fileSizeInMB = stats.size / (1024 * 1024);
@@ -132,7 +132,7 @@ export class PhotosController {
 
             // Eğer video ise önizleme görüntüsü oluştur
             let thumbnailFilename: string | null = null;
-            let thumbnailData = null;
+            let thumbnailData: Buffer | undefined = undefined;
             if (isVideo) {
                 try {
                     thumbnailFilename = `thumb_${file.filename.split('.')[0]}.jpg`;
@@ -157,7 +157,7 @@ export class PhotosController {
                 dosya_yolu: file.path,
                 url: imagePath,
                 thumbnail: thumbnailFilename,
-                veritabaninda_saklanacak: imageData !== null
+                veritabaninda_saklanacak: imageData !== undefined
             });
 
             // Yüklenen dosyayı verilen izinleri kontrol edelim ve düzeltelim
@@ -276,7 +276,7 @@ export class PhotosController {
     }
 
     @Delete('photos/:id')
-    async remove(@Param('id') id: string): Promise<void> {
+    async remove(@Param('id') id: string): Promise<boolean> {
         return this.photosService.remove(id);
     }
 } 

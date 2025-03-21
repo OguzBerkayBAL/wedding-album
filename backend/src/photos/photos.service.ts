@@ -121,7 +121,13 @@ export class PhotosService {
 
             // Her bir fotoğrafı tek tek silmek için remove metodunu kullan
             for (const photo of photos) {
-                await this.remove(photo.id);
+                // PhotoDocument'te _id kullanılmalı
+                const photoId = (photo as any)._id || photo['id'];
+                if (photoId) {
+                    await this.remove(photoId.toString());
+                } else {
+                    console.error('Fotoğraf ID bulunamadı:', photo);
+                }
             }
 
             return true;
