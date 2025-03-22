@@ -55,19 +55,35 @@ const AlbumPage: React.FC = () => {
 
       console.log(`Album ID: ${id} için veri yükleniyor...`);
 
-      // Album bilgilerini al
-      const albumData = await albumService.getAlbumById(id);
-      setAlbum(albumData);
-      console.log('Album yüklendi:', albumData.name);
+      try {
+        // Album bilgilerini al
+        const albumData = await albumService.getAlbumById(id);
+        setAlbum(albumData);
+        console.log('Album yüklendi:', albumData.title);
+      } catch (albumError: any) {
+        console.error('Album yüklenirken hata:', albumError);
+        setError('Album bilgileri yüklenemedi. Lütfen sayfayı yenileyin.');
+        setLoading(false);
+        return;
+      }
 
-      // Album fotoğraflarını al
-      const photoData = await photoService.getPhotosByAlbumId(id);
-      setPhotos(photoData);
-      console.log(`${photoData.length} fotoğraf yüklendi`);
+      try {
+        // Album fotoğraflarını al
+        const photoData = await photoService.getPhotosByAlbumId(id);
+        setPhotos(photoData);
+        console.log(`${photoData.length} fotoğraf yüklendi`);
+      } catch (photoError: any) {
+        console.error('Fotoğraflar yüklenirken hata:', photoError);
+        // Fotoğraf yükleme hatası kullanıcıya bildirilir ancak albüm görüntülenmeye devam eder
+        toast.error('Fotoğraflar yüklenirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.', {
+          position: "top-center",
+          autoClose: 5000
+        });
+      }
 
     } catch (err: any) {
       console.error('Album yükleme hatası:', err);
-      setError('Album yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.');
+      setError(err.message || 'Album yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.');
     } finally {
       setLoading(false);
     }
@@ -152,7 +168,7 @@ const AlbumPage: React.FC = () => {
       <div className="container mx-auto py-6 px-4">
         {album && (
           <div className="mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">{album.name}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">{album.title}</h1>
             {album.description && (
               <p className="text-gray-600">{album.description}</p>
             )}

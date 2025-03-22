@@ -1,8 +1,9 @@
 import api from './api';
 import { Photo } from '../models/Photo';
 
-// Backend URL
-const BACKEND_URL = process.env.REACT_APP_API_URL || 'https://wedding-album-backend.onrender.com';
+// Backend URL - API bağlantısı için kullanılacak URL
+const BACKEND_URL = 'https://wedding-album-dfzw.onrender.com';
+const API_URL = `${BACKEND_URL}/api`;
 
 const photoService = {
     // Albüme fotoğraf yükle
@@ -33,8 +34,10 @@ const photoService = {
             let photo = response.data;
 
             // Eğer localhost referans eden bir path varsa, düzelt
-            if (photo.photoPath && photo.photoPath.startsWith('http://localhost')) {
-                photo.photoPath = photo.photoPath.replace('http://localhost:3001', BACKEND_URL);
+            if (photo.photoPath && photo.photoPath.includes('localhost')) {
+                const newPath = photo.photoPath.replace('http://localhost:3001', BACKEND_URL);
+                console.log('Upload path düzeltildi:', newPath);
+                photo.photoPath = newPath;
             }
 
             return photo;
@@ -60,34 +63,108 @@ const photoService = {
 
     // Bir albümdeki tüm fotoğrafları getir
     getPhotosByAlbumId: async (albumId: string): Promise<Photo[]> => {
-        const response = await api.get(`/photos/album/${albumId}`);
+        try {
+            console.log(`Albüm fotoğrafları alınıyor, Albüm ID: ${albumId}`);
 
-        // Gelen fotoğrafların path'lerini düzelt
-        return response.data.map((photo: Photo) => {
-            if (photo.photoPath && photo.photoPath.startsWith('http://localhost')) {
-                photo.photoPath = photo.photoPath.replace('http://localhost:3001', BACKEND_URL);
+            // ÖNEMLİ: Backend API'de doğru endpoint formatını belirlemek için öncelikle
+            // eski formatta çalışan endpoint ile deneyelim (hata loglarında eski formatın çalıştığı görülüyor)
+            try {
+                // İlk olarak eski endpoint formatını deneyelim
+                console.log('Eski endpoint deneniyor:', `/albums/${albumId}/photos`);
+                const response = await api.get(`/albums/${albumId}/photos`);
+                console.log('Eski endpoint başarılı:', response.data);
+
+                // Gelen fotoğrafların path'lerini düzelt
+                return response.data.map((photo: Photo) => {
+                    console.log('Fotoğraf işleniyor. Orijinal path:', photo.photoPath);
+
+                    if (photo.photoPath && photo.photoPath.includes('localhost')) {
+                        const newPath = photo.photoPath.replace('http://localhost:3001', BACKEND_URL);
+                        console.log('Path düzeltildi:', newPath);
+                        photo.photoPath = newPath;
+                    }
+
+                    return photo;
+                });
+            } catch (oldEndpointError: any) {
+                console.warn('Eski endpoint başarısız, yeni format deneniyor:', oldEndpointError.message);
+
+                // Eğer eski format başarısız olursa, yeni endpoint formatta deneyelim
+                console.log('Yeni endpoint deneniyor:', `/photos/album/${albumId}`);
+                const response = await api.get(`/photos/album/${albumId}`);
+                console.log('Yeni endpoint başarılı:', response.data);
+
+                // Gelen fotoğrafların path'lerini düzelt
+                return response.data.map((photo: Photo) => {
+                    console.log('Fotoğraf işleniyor. Orijinal path:', photo.photoPath);
+
+                    if (photo.photoPath && photo.photoPath.includes('localhost')) {
+                        const newPath = photo.photoPath.replace('http://localhost:3001', BACKEND_URL);
+                        console.log('Path düzeltildi:', newPath);
+                        photo.photoPath = newPath;
+                    }
+
+                    return photo;
+                });
             }
-            return photo;
-        });
+        } catch (error: any) {
+            console.error('Albüm fotoğraflarını getirme hatası:', error);
+
+            // Hata detaylarını logla
+            if (error.response) {
+                console.error('API Yanıt Hatası:', {
+                    status: error.response.status,
+                    statusText: error.response.statusText,
+                    data: error.response.data,
+                    headers: error.response.headers,
+                    endpoint: `/albums/${albumId}/photos ve /photos/album/${albumId}`
+                });
+            }
+
+            // Hata durumunda boş dizi döndür (UI'ın çökmemesi için)
+            console.log('Albüm fotoğrafları getirilemedi, boş dizi döndürülüyor');
+            return [];
+        }
     },
 
     // Tek bir fotoğrafı getir
     getPhotoById: async (photoId: string): Promise<Photo> => {
-        const response = await api.get(`/photos/${photoId}`);
-        const photo = response.data;
+        try {
+            console.log(`Fotoğraf alınıyor, ID: ${photoId}`);
+            const response = await api.get(`/photos/${photoId}`);
+            const photo = response.data;
 
-        // Path'i düzelt
-        if (photo.photoPath && photo.photoPath.startsWith('http://localhost')) {
-            photo.photoPath = photo.photoPath.replace('http://localhost:3001', BACKEND_URL);
+            // Path'i düzelt
+            console.log('Fotoğraf detayı işleniyor. Orijinal path:', photo.photoPath);
+            if (photo.photoPath && photo.photoPath.includes('localhost')) {
+                const newPath = photo.photoPath.replace('http://localhost:3001', BACKEND_URL);
+                console.log('Path düzeltildi:', newPath);
+                photo.photoPath = newPath;
+            }
+
+            return photo;
+        } catch (error: any) {
+            console.error(`Fotoğraf getirme hatası (ID: ${photoId}):`, error);
+            if (error.response) {
+                console.error('API Yanıt Hatası:', {
+                    status: error.response.status,
+                    statusText: error.response.statusText,
+                    data: error.response.data
+                });
+            }
+            throw new Error('Fotoğraf yüklenirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
         }
-
-        return photo;
     },
 
     // Fotoğrafı sil
     deletePhoto: async (photoId: string): Promise<void> => {
-        await api.delete(`/photos/${photoId}`);
+        try {
+            await api.delete(`/photos/${photoId}`);
+        } catch (error: any) {
+            console.error(`Fotoğraf silme hatası (ID: ${photoId}):`, error);
+            throw new Error('Fotoğraf silinirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
+        }
     }
 };
 
-export { photoService }; 
+export { photoService };

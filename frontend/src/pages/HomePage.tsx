@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, TouchEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '../components/Header';
 import { Album } from '../models/Album';
 import { Photo } from '../models/Photo';
@@ -7,6 +7,9 @@ import { albumService } from '../services/albumService';
 import { photoService } from '../services/photoService';
 import { TrashIcon } from '@heroicons/react/24/outline';
 import FallingHearts from '../components/FallingHearts';
+import { toast } from 'react-toastify';
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/solid';
+import { isVideo } from '../utils/fileUtils';
 
 const HomePage: React.FC = () => {
   const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
@@ -32,14 +35,16 @@ const HomePage: React.FC = () => {
     '/seda3.jpg'
   ];
 
-  // Ana slider için gelin damat fotoğraflarını kullan, düğün fotoğraflarını değil
-  const sliderMedia = fallbackSliderImages.map((img, index) => ({
+  // Ana slider için default değer tanımla - Gelin damat fotoğraflarını kullan
+  const [sliderMedia, setSliderMedia] = useState(fallbackSliderImages.map((img, index) => ({
     _id: String(index),
-    imagePath: img,
+    photoPath: img,
     title: `Düğün fotoğrafı ${index + 1}`,
     name: '',
-    isVideo: false
-  }));
+    albumId: '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  })));
 
   const nextSlide = useCallback(() => {
     setCurrentSlide((prev) =>
@@ -63,15 +68,47 @@ const HomePage: React.FC = () => {
         if (albums.length > 0) {
           const album = albums[0]; // İlk albümü al
           setCurrentAlbum(album);
+          console.log('Anasayfa: İlk albüm yüklendi', album.title);
 
           // Fotoğrafları getir
           if (album._id) {
-            const albumPhotos = await photoService.getPhotosByAlbumId(album._id);
-            setPhotos(albumPhotos);
+            try {
+              console.log(`Anasayfa: Albüm ${album._id} için fotoğraflar alınıyor`);
+              const albumPhotos = await photoService.getPhotosByAlbumId(album._id);
+
+              if (albumPhotos && albumPhotos.length > 0) {
+                console.log(`Anasayfa: ${albumPhotos.length} fotoğraf başarıyla yüklendi`);
+                setPhotos(albumPhotos);
+
+                // İlk 5 fotoğrafı slider için ayarla (veya tümünü, 5'ten az ise)
+                const sliderItems = albumPhotos.slice(0, Math.min(5, albumPhotos.length));
+                setSliderMedia(sliderItems as any); // Type uyumsuzluğu nedeniyle as any kullanıyoruz
+              } else {
+                console.log('Anasayfa: Albümde fotoğraf bulunamadı veya boş dizi döndü');
+                setPhotos([]);
+                setSliderMedia([] as any); // Type uyumsuzluğu nedeniyle as any kullanıyoruz
+              }
+            } catch (photoError) {
+              console.error('Anasayfa: Fotoğraf yükleme hatası:', photoError);
+              // Fotoğraf yükleme hatası uygulama akışını durdurmamalı
+              setPhotos([]);
+              setSliderMedia([] as any); // Type uyumsuzluğu nedeniyle as any kullanıyoruz
+              // Hata bildirimini toast ile gösterebiliriz
+              toast.error('Fotoğraflar yüklenirken sorun oluştu', {
+                position: 'top-center',
+                autoClose: 3000
+              });
+            }
           }
+        } else {
+          console.log('Anasayfa: Hiç albüm bulunamadı');
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Anasayfa: Veri yükleme hatası:', error);
+        toast.error('Albüm bilgileri yüklenirken hata oluştu', {
+          position: 'top-center',
+          autoClose: 3000
+        });
       } finally {
         setLoading(false);
       }
@@ -92,7 +129,7 @@ const HomePage: React.FC = () => {
   const handleAddPhotoClick = () => {
     if (currentAlbum && currentAlbum._id) {
       console.log("Yönlendirme yapılıyor, album ID:", currentAlbum._id);
-      navigate(`/album/${currentAlbum._id}?upload=true`);
+      navigate(`/album/${currentAlbum._id}?showUpload=true`);
     } else {
       console.error("Album ID bulunamadı!");
     }
@@ -130,7 +167,7 @@ const HomePage: React.FC = () => {
   };
 
   const openPhotoModal = (photo: Photo) => {
-    if (photo.isVideo) {
+    if (isVideo(photo.photoPath)) {
       setVideoLoading(true);
     }
     setSelectedPhoto(photo);
@@ -240,20 +277,21 @@ const HomePage: React.FC = () => {
                   key={media._id}
                   className="w-full h-full flex-shrink-0 relative bg-white flex items-center justify-center p-4"
                 >
-                  {typeof media === 'string' || !media.isVideo ? (
+                  {!isVideo(media.photoPath) ? (
                     <img
-                      src={typeof media === 'string' ? media : media.imagePath}
-                      alt={typeof media === 'string' ? `Düğün fotoğrafı ${index + 1}` : media.title}
+                      src={media.photoPath}
+                      alt={media.title}
                       className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm"
                       draggable="false"
                     />
                   ) : (
                     <video
-                      src={media.imagePath}
-                      className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm"
+                      src={media.photoPath}
                       controls
                       muted
                       onClick={e => e.currentTarget.play()}
+                      className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm"
+                      draggable="false"
                     />
                   )}
                 </div>
@@ -318,11 +356,11 @@ const HomePage: React.FC = () => {
                 <div className="flex gap-5 px-2 snap-x snap-mandatory">
                   {photos.map((photo) => (
                     <div
-                      key={photo._id}
+                      key={photo._id || `photo-${Math.random()}`}
                       className="bg-white rounded-xl overflow-hidden shadow-md hover:-translate-y-1 transition-all duration-300 hover:shadow-lg relative flex-shrink-0 w-64 snap-start h-full border border-gray-100"
                     >
                       <div className="cursor-pointer" onClick={() => openPhotoModal(photo)}>
-                        {photo.isVideo ? (
+                        {isVideo(photo.photoPath) ? (
                           <div className="relative w-full h-44 bg-gray-50 overflow-hidden">
                             <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
                               <div className="bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-lg transition-transform duration-300 hover:scale-110">
@@ -339,8 +377,8 @@ const HomePage: React.FC = () => {
                         ) : (
                           <div className="relative w-full h-44 overflow-hidden">
                             <img
-                              src={photo.imagePath}
-                              alt={photo.title}
+                              src={photo.photoPath}
+                              alt={photo.title || 'Düğün fotoğrafı'}
                               className="w-full h-full object-cover transition-transform duration-700 hover:scale-110"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
@@ -487,8 +525,8 @@ const HomePage: React.FC = () => {
             </button>
 
             <a
-              href={selectedPhoto.imagePath}
-              download={`${selectedPhoto.title}.${selectedPhoto.isVideo ? 'mp4' : 'jpg'}`}
+              href={selectedPhoto.photoPath}
+              download={`${selectedPhoto.title || 'photo'}.${isVideo(selectedPhoto.photoPath) ? 'mp4' : 'jpg'}`}
               className="absolute top-3 left-3 bg-white/80 backdrop-blur-sm text-gray-800 w-9 h-9 rounded-full flex items-center justify-center z-10 hover:bg-white transition-colors"
               title="İndir"
               onClick={e => e.stopPropagation()}
@@ -496,7 +534,7 @@ const HomePage: React.FC = () => {
               ⬇️
             </a>
 
-            {videoLoading && selectedPhoto.isVideo && (
+            {videoLoading && isVideo(selectedPhoto.photoPath) && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-[5]">
                 <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
@@ -504,18 +542,18 @@ const HomePage: React.FC = () => {
 
             <div className="bg-white rounded-t-xl p-4 mb-1">
               <h3 className="text-lg font-medium text-gray-800">
-                {selectedPhoto.isVideo && (
+                {isVideo(selectedPhoto.photoPath) && (
                   <span className="inline-block bg-pink-100 text-pink-800 text-xs font-semibold mr-2 px-2 py-0.5 rounded">
                     Video
                   </span>
                 )}
-                {selectedPhoto.title}
+                {selectedPhoto.title || 'Düğün fotoğrafı'}
               </h3>
             </div>
 
-            {selectedPhoto.isVideo ? (
+            {isVideo(selectedPhoto.photoPath) ? (
               <video
-                src={selectedPhoto.imagePath}
+                src={selectedPhoto.photoPath}
                 className="max-w-full max-h-[70vh] rounded-b-xl bg-black"
                 controls
                 autoPlay
@@ -524,8 +562,8 @@ const HomePage: React.FC = () => {
               />
             ) : (
               <img
-                src={selectedPhoto.imagePath}
-                alt={selectedPhoto.title}
+                src={selectedPhoto.photoPath}
+                alt={selectedPhoto.title || 'Düğün fotoğrafı'}
                 className="max-w-full max-h-[70vh] rounded-b-xl bg-black object-contain"
               />
             )}
