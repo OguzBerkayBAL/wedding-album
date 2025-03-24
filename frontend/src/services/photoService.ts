@@ -11,18 +11,18 @@ const photoService = {
         try {
             // Kontrolü geliştirmek için formData içeriğini logla
             console.log('FormData içeriği:');
-            const albumId = formData.get('albumId');
-            console.log('albumId:', albumId);
+            const album = formData.get('album');
+            console.log('album:', album);
             console.log('name:', formData.get('name'));
             console.log('title:', formData.get('title'));
             console.log('file name:', formData.get('photo') instanceof File ? (formData.get('photo') as File).name : 'dosya yok');
 
-            if (!albumId) {
+            if (!album) {
                 throw new Error('Album ID gereklidir');
             }
 
             // Doğru endpoint'i kullan: /albums/:albumId/photos
-            const response = await api.post(`/albums/${albumId}/photos`, formData, {
+            const response = await api.post(`/albums/${album}/photos`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },

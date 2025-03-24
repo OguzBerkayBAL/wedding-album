@@ -76,12 +76,13 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
         formData.append('title', fileTitle);
 
         formData.append('photo', file);
-        formData.append('albumId', albumId);
+        formData.append('album', albumId);
 
         console.log(`Dosya ${i + 1} yükleniyor:`, {
           name: name.trim(),
           title: fileTitle,
-          fileName: file.name
+          fileName: file.name,
+          album: albumId
         });
 
         // Cloudinary entegrasyonu ile yükleme
