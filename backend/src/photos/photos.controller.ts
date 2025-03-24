@@ -83,6 +83,24 @@ export class PhotosController {
             // Daha detaylı log ekle
             this.logger.log(`Dosya yükleme isteği: albumId=${albumId}, file.originalname=${file.originalname}`);
 
+            // Form verilerini kontrol et ve eksik alanlar için varsayılan değerler ata
+            this.logger.log(`Form verileri: ${JSON.stringify(createPhotoDto)}`);
+
+            // Eğer name boşsa, dosya adını kullan
+            if (!createPhotoDto.name || createPhotoDto.name.trim() === '') {
+                createPhotoDto.name = file.originalname.split('.')[0] || 'Adsız';
+                this.logger.log(`Name eksik, otomatik atandı: ${createPhotoDto.name}`);
+            }
+
+            // Eğer title boşsa, dosya adını kullan
+            if (!createPhotoDto.title || createPhotoDto.title.trim() === '') {
+                createPhotoDto.title = file.originalname.split('.')[0] || 'Başlıksız';
+                this.logger.log(`Title eksik, otomatik atandı: ${createPhotoDto.title}`);
+            }
+
+            // Album ID'yi DTO'ya ekle
+            createPhotoDto.album = albumId;
+
             // Cloudinary konfigürasyon kontrolü
             this.logger.log('Cloudinary config kontrolü:');
             this.logger.log(`CLOUDINARY_CLOUD_NAME: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Mevcut' : 'Yok'}`);
@@ -110,11 +128,11 @@ export class PhotosController {
             }
 
             this.logger.log(`PhotosService.create çağrılıyor: ${albumId}, ${cloudinaryUrl}`);
+            this.logger.log(`CreatePhotoDto: ${JSON.stringify(createPhotoDto)}`);
 
             // Fotoğrafı veritabanına kaydet
             return this.photosService.create({
                 ...createPhotoDto,
-                album: albumId,
                 isVideo,
                 thumbnailPath
             }, cloudinaryUrl);
