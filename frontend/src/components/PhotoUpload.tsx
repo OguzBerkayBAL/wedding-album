@@ -67,10 +67,13 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
         formData.append('photo', file);
         formData.append('albumId', albumId);
 
-        await photoService.uploadPhoto(formData);
-
-        // İlerleme durumunu güncelle
-        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+        // Cloudinary entegrasyonu ile yükleme
+        await photoService.uploadPhoto(formData, (progress) => {
+          // Her dosya için ilerleme yüzdesini güncelle
+          // Toplam ilerleme = (tamamlanan dosyalar + şu anki dosyanın yüzdesi / 100) / toplam dosya sayısı
+          const totalProgress = Math.round(((i + (progress / 100)) / files.length) * 100);
+          setUploadProgress(totalProgress);
+        });
       }
 
       // Başarı mesajı göster
@@ -79,14 +82,17 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
       // Yönlendirme durumunu aktif et
       setIsRedirecting(true);
 
+      // Formu sıfırla
+      setName('');
+      setTitle('');
+      setFiles([]);
+      setPreviews([]);
+
+      // Albüm sayfasını güncelle
+      onUploadSuccess();
+
       // 2 saniye sonra ana sayfaya yönlendir
       setTimeout(() => {
-        // Formu sıfırla
-        setName('');
-        setTitle('');
-        setFiles([]);
-        setPreviews([]);
-        
         // Sayfayı yenileyerek ana sayfaya dön
         window.location.href = '/';
       }, 2000);
@@ -96,7 +102,6 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
       setErrorMessage('Dosyalar yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
     } finally {
       setIsUploading(false);
-      setUploadProgress(0);
     }
   };
 
