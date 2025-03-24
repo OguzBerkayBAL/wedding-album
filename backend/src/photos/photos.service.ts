@@ -139,9 +139,13 @@ export class PhotosService {
 
             // Albümdeki tüm fotoğrafları sil
             for (const photo of photos) {
-                const photoId = (photo as any)._id || photo.id;
+                // MongoDB belgesinden ID'yi doğru şekilde alma
+                // TypeScript hatası giderme - _id kullanımı için tip dönüşümü
+                const photoId = (photo as any)._id?.toString();
                 if (photoId) {
-                    await this.remove(photoId.toString());
+                    await this.remove(photoId);
+                } else {
+                    this.logger.warn(`Photo ID bulunamadı: ${JSON.stringify(photo)}`);
                 }
             }
 
