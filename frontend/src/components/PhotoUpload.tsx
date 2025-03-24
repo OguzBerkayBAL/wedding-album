@@ -53,6 +53,11 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
       return;
     }
 
+    if (!name.trim()) {
+      setErrorMessage('Lütfen adınızı girin');
+      return;
+    }
+
     try {
       setIsUploading(true);
       setErrorMessage(null);
@@ -62,10 +67,22 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const formData = new FormData();
-        formData.append('name', name);
-        formData.append('title', title || file.name); // Başlık yoksa dosya adını kullan
+
+        // Adı ekle
+        formData.append('name', name.trim());
+
+        // Başlık ekle - boşsa dosya adını kullan
+        const fileTitle = title.trim() || file.name.split('.')[0];
+        formData.append('title', fileTitle);
+
         formData.append('photo', file);
         formData.append('albumId', albumId);
+
+        console.log(`Dosya ${i + 1} yükleniyor:`, {
+          name: name.trim(),
+          title: fileTitle,
+          fileName: file.name
+        });
 
         // Cloudinary entegrasyonu ile yükleme
         await photoService.uploadPhoto(formData, (progress) => {
@@ -129,7 +146,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
           <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-            Adınız
+            Adınız <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -144,7 +161,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
 
         <div className="space-y-2">
           <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-            Başlık (İsteğe Bağlı)
+            Başlık (Boş bırakılırsa dosya adı kullanılır)
           </label>
           <input
             type="text"
