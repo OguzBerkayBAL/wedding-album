@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AlbumsModule } from './albums/albums.module';
 import { PhotosModule } from './photos/photos.module';
 import { MulterModule } from '@nestjs/platform-express';
+import { CloudinaryProvider } from './config/cloudinary.config';
 
 @Module({
   imports: [
@@ -26,6 +27,6 @@ import { MulterModule } from '@nestjs/platform-express';
     PhotosModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, CloudinaryProvider],
 })
 export class AppModule { }
