@@ -1,47 +1,36 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { NestExpressApplication } from '@nestjs/platform-express';
-import { ConfigService } from '@nestjs/config';
-import * as path from 'path';
-import { join } from 'path';
+import { ValidationPipe } from '@nestjs/common';
 import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  const configService = app.get(ConfigService);
+  const app = await NestFactory.create(AppModule);
 
-  // Dosya yükleme limitini 60MB'a ayarla
-  app.use(bodyParser.json({ limit: '60mb' }));
-  app.use(bodyParser.urlencoded({ limit: '60mb', extended: true }));
-
-  // CORS ayarları
-  app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3002',
-      'https://frontend-iwc82e2ki-oguzberkays-projects.vercel.app',
-      'https://wedding-album-frontend.vercel.app',
-      'https://wedding-album.vercel.app',
-      'https://wedding-album-frontend.onrender.com'],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
-    allowedHeaders: 'Content-Type,Authorization,X-Requested-With',
-    exposedHeaders: 'Content-Range,X-Total-Count',
-    maxAge: 3600,
-  });
-
-  // API prefix
+  // Global prefik (örneğin, /api)
   app.setGlobalPrefix('api');
 
-  // Statik dosyaları servis et
-  const uploadsDir = join(__dirname, '..', 'uploads');
-  console.log('Static files are served from', uploadsDir);
-  app.useStaticAssets(uploadsDir, {
-    prefix: '/uploads',
+  // CORS ayarları - tüm kaynaklardan gelen isteklere izin ver
+  app.enableCors({
+    origin: true, // Tüm kaynaklar
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
   });
 
-  const port = configService.get<number>('PORT', 3001);
+  // JSON limit artırımı
+  app.use(bodyParser.json({ limit: '50mb' }));
+  app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
+  // Validasyon pipe
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,
+    whitelist: true,
+  }));
+
+  // HTTP uyarıları loglama
+  app.useLogger(['log', 'error', 'warn', 'debug', 'verbose']);
+
+  const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`Application is running on port ${port}`);
-  console.log(`Static files are served from ${uploadsDir}`);
-  console.log(`File upload limit set to 60MB`);
+  console.log(`Application is running on: ${await app.getUrl()}`);
 }
 bootstrap();

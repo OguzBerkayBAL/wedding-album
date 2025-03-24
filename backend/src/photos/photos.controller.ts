@@ -9,7 +9,8 @@ import {
     UploadedFile,
     BadRequestException,
     Res,
-    Logger
+    Logger,
+    InternalServerErrorException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { extname, join } from 'path';
@@ -79,7 +80,19 @@ export class PhotosController {
         }
 
         try {
-            this.logger.log(`Cloudinary'ye yüklenen dosya: ${file.originalname}, ${file.mimetype}`);
+            // Daha detaylı log ekle
+            this.logger.log(`Dosya yükleme isteği: albumId=${albumId}, file.originalname=${file.originalname}`);
+
+            // Cloudinary konfigürasyon kontrolü
+            this.logger.log('Cloudinary config kontrolü:');
+            this.logger.log(`CLOUDINARY_CLOUD_NAME: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Mevcut' : 'Yok'}`);
+            this.logger.log(`CLOUDINARY_API_KEY: ${process.env.CLOUDINARY_API_KEY ? 'Mevcut' : 'Yok'}`);
+            this.logger.log(`CLOUDINARY_URL: ${process.env.CLOUDINARY_URL ? 'Mevcut' : 'Yok'}`);
+
+            this.logger.log(`Cloudinary'ye yüklenen dosya: ${file.originalname}, ${file.mimetype}, ${file.size} bytes`);
+
+            // Tam dosya içeriğini loglama
+            this.logger.log('Dosya detayları:', JSON.stringify(file, null, 2));
 
             // Cloudinary'den dönen URL'yi kullan
             const cloudinaryUrl = file.path;
@@ -92,11 +105,11 @@ export class PhotosController {
             let thumbnailPath = undefined;
             if (isVideo) {
                 // Video thumbnail URL'si oluştur
-                // Örnek: https://res.cloudinary.com/cloud_name/video/upload/v123/wedding_photos/file.mp4
-                // thumbnail: https://res.cloudinary.com/cloud_name/video/upload/v123/wedding_photos/file.jpg
                 thumbnailPath = cloudinaryUrl.replace(/\.[^.]+$/, '.jpg');
                 this.logger.log(`Video thumbnail URL: ${thumbnailPath}`);
             }
+
+            this.logger.log(`PhotosService.create çağrılıyor: ${albumId}, ${cloudinaryUrl}`);
 
             // Fotoğrafı veritabanına kaydet
             return this.photosService.create({
@@ -106,8 +119,20 @@ export class PhotosController {
                 thumbnailPath
             }, cloudinaryUrl);
         } catch (error) {
+            // Hata detaylarını loglama
             this.logger.error(`Dosya yükleme hatası: ${error.message}`);
-            throw new BadRequestException(`Dosya yükleme hatası: ${error.message}`);
+            this.logger.error(`Hata stack: ${error.stack}`);
+
+            if (error.code === 'ENOENT') {
+                this.logger.error('Dosya veya dizin bulunamadı hatası oluştu');
+            }
+
+            // Hata ile ilgili ek bilgiler
+            if (error.response) {
+                this.logger.error(`API Yanıt Hatası: ${JSON.stringify(error.response.data)}`);
+            }
+
+            throw new InternalServerErrorException(`Dosya yüklenirken bir sorun oluştu: ${error.message}`);
         }
     }
 
