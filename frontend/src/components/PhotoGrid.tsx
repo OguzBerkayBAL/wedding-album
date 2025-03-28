@@ -48,29 +48,43 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({ photos, onPhotoDeleted }) => {
     setSelectedPhotoIndex(-1);
   }, []);
 
-  const goToNextPhoto = useCallback((e?: React.MouseEvent) => {
+  const goToNextPhoto = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (selectedPhotoIndex < photos.length - 1) {
-      const nextIndex = selectedPhotoIndex + 1;
-      setSelectedPhotoIndex(nextIndex);
-      setSelectedPhoto(photos[nextIndex]);
-      if (photos[nextIndex].isVideo) {
-        setVideoLoading(true);
-      }
-    }
-  }, [selectedPhotoIndex, photos]);
+      // Sonraki fotoğraf için sağdan sola geçiş efekti
+      setSwipeOffset(-5); // Sola doğru hafif bir başlangıç offseti
 
-  const goToPreviousPhoto = useCallback((e?: React.MouseEvent) => {
+      setTimeout(() => {
+        const nextIndex = selectedPhotoIndex + 1;
+        setSelectedPhotoIndex(nextIndex);
+        setSelectedPhoto(photos[nextIndex]);
+        if (photos[nextIndex].isVideo) {
+          setVideoLoading(true);
+        }
+        // Hemen sıfırla
+        setSwipeOffset(0);
+      }, 10);
+    }
+  };
+
+  const goToPreviousPhoto = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (selectedPhotoIndex > 0) {
-      const prevIndex = selectedPhotoIndex - 1;
-      setSelectedPhotoIndex(prevIndex);
-      setSelectedPhoto(photos[prevIndex]);
-      if (photos[prevIndex].isVideo) {
-        setVideoLoading(true);
-      }
+      // Önceki fotoğraf için soldan sağa geçiş efekti
+      setSwipeOffset(5); // Sağa doğru hafif bir başlangıç offseti
+
+      setTimeout(() => {
+        const prevIndex = selectedPhotoIndex - 1;
+        setSelectedPhotoIndex(prevIndex);
+        setSelectedPhoto(photos[prevIndex]);
+        if (photos[prevIndex].isVideo) {
+          setVideoLoading(true);
+        }
+        // Hemen sıfırla
+        setSwipeOffset(0);
+      }, 10);
     }
-  }, [selectedPhotoIndex, photos]);
+  };
 
   const handleModalTouchStart = (e: React.TouchEvent) => {
     e.stopPropagation();
@@ -115,53 +129,20 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({ photos, onPhotoDeleted }) => {
       return;
     }
 
-    // Swipe yönünü ve miktarını belirle
-    const currentSwipeOffset = swipeOffset;
-    const swipeThreshold = 10; // Daha düşük bir eşik değeri kullan - bırakıldığında devam edecek
-    const maxSwipeOffset = 40; // Maksimum swipe miktarı, bundan sonra otomatik tamamlansın
+    // Kaydırma mesafesini hesapla (touchStart - touchEnd)
+    const swipeDistance = touchStart - touchEnd;
 
-    // Sağa kaydırma - önceki fotoğraf
-    if (currentSwipeOffset > 0) {
-      if (selectedPhotoIndex > 0) {
-        if (currentSwipeOffset > maxSwipeOffset) {
-          // Otomatik olarak tamamla - önceki fotoğrafa geç
-          console.log('Önceki fotoğrafa doğal geçiş yapılıyor');
-          animateToNextPhotoNaturally(selectedPhotoIndex - 1, currentSwipeOffset);
-        } else if (currentSwipeOffset > swipeThreshold) {
-          // Eğer eşiği geçtiyse tamamla
-          console.log('Önceki fotoğrafa geçiş tamamlanıyor');
-          animateToNextPhotoNaturally(selectedPhotoIndex - 1, currentSwipeOffset);
-        } else {
-          // Eşiğin altındaysa geri dön
-          animateReset();
-        }
-      } else {
-        // İlk fotoğraftaysak geri dön
-        animateReset();
-      }
+    // Sola kaydırma (touchStart > touchEnd) - sonraki fotoğraf
+    if (swipeDistance > 5 && selectedPhotoIndex < photos.length - 1) {
+      goToNextPhoto();
     }
-    // Sola kaydırma - sonraki fotoğraf
-    else if (currentSwipeOffset < 0) {
-      if (selectedPhotoIndex < photos.length - 1) {
-        if (Math.abs(currentSwipeOffset) > maxSwipeOffset) {
-          // Otomatik olarak tamamla - sonraki fotoğrafa geç
-          console.log('Sonraki fotoğrafa doğal geçiş yapılıyor');
-          animateToNextPhotoNaturally(selectedPhotoIndex + 1, currentSwipeOffset);
-        } else if (Math.abs(currentSwipeOffset) > swipeThreshold) {
-          // Eğer eşiği geçtiyse tamamla
-          console.log('Sonraki fotoğrafa geçiş tamamlanıyor');
-          animateToNextPhotoNaturally(selectedPhotoIndex + 1, currentSwipeOffset);
-        } else {
-          // Eşiğin altındaysa geri dön
-          animateReset();
-        }
-      } else {
-        // Son fotoğraftaysak geri dön
-        animateReset();
-      }
-    } else {
-      // Hiç hareket yoksa sıfırla
-      animateReset();
+    // Sağa kaydırma (touchStart < touchEnd) - önceki fotoğraf
+    else if (swipeDistance < -5 && selectedPhotoIndex > 0) {
+      goToPreviousPhoto();
+    }
+    // Eğer yeterli mesafe kaydırılmadıysa veya sınırlardaysa sıfırla
+    else {
+      setSwipeOffset(0);
     }
 
     // Tüm touch ve swiping durumlarını sıfırla
@@ -232,20 +213,10 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({ photos, onPhotoDeleted }) => {
 
     if (e.key === 'ArrowRight' && selectedPhotoIndex < photos.length - 1) {
       // Sonraki fotoğraf
-      const nextIndex = selectedPhotoIndex + 1;
-      setSelectedPhotoIndex(nextIndex);
-      setSelectedPhoto(photos[nextIndex]);
-      if (photos[nextIndex].isVideo) {
-        setVideoLoading(true);
-      }
+      goToNextPhoto();
     } else if (e.key === 'ArrowLeft' && selectedPhotoIndex > 0) {
       // Önceki fotoğraf
-      const prevIndex = selectedPhotoIndex - 1;
-      setSelectedPhotoIndex(prevIndex);
-      setSelectedPhoto(photos[prevIndex]);
-      if (photos[prevIndex].isVideo) {
-        setVideoLoading(true);
-      }
+      goToPreviousPhoto();
     } else if (e.key === 'Escape') {
       closeModal();
     }
