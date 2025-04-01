@@ -38,6 +38,44 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
     }
   };
 
+  // Seçilen dosyaları kaldırma fonksiyonu
+  const handleRemoveFile = () => {
+    // Tüm URL'leri temizle
+    previews.forEach(preview => URL.revokeObjectURL(preview.url));
+    // Tüm dosyaları kaldır
+    setFiles([]);
+    setPreviews([]);
+
+    // Input elemanını sıfırla
+    const fileInput = document.getElementById('photo') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  };
+
+  // Belirli bir dosyayı kaldırma fonksiyonu
+  const handleRemoveSingleFile = (index: number) => {
+    // Kaldırılan dosyanın URL'sini temizle
+    URL.revokeObjectURL(previews[index].url);
+
+    // Dosyayı ve önizlemeyi dizilerden kaldır
+    const newFiles = [...files];
+    newFiles.splice(index, 1);
+    setFiles(newFiles);
+
+    const newPreviews = [...previews];
+    newPreviews.splice(index, 1);
+    setPreviews(newPreviews);
+
+    // Eğer tüm dosyalar kaldırıldıysa input'u sıfırla
+    if (newFiles.length === 0) {
+      const fileInput = document.getElementById('photo') as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = '';
+      }
+    }
+  };
+
   // Komponent kaldırıldığında URL'leri temizle
   useEffect(() => {
     return () => {
@@ -206,27 +244,48 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
 
           {/* Önizlemeler */}
           {previews.length > 0 && (
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {previews.map((preview, index) => (
-                <div key={index} className="relative rounded-md overflow-hidden border border-gray-200">
-                  {preview.isVideo ? (
-                    <video
-                      src={preview.url}
-                      className="h-24 w-full object-cover"
-                    />
-                  ) : (
-                    <img
-                      src={preview.url}
-                      alt={`Önizleme ${index + 1}`}
-                      className="h-24 w-full object-cover"
-                    />
-                  )}
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 truncate">
-                    {files[index].name}
+            <>
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {previews.map((preview, index) => (
+                  <div key={index} className="relative rounded-md overflow-hidden border border-gray-200 group">
+                    {preview.isVideo ? (
+                      <video
+                        src={preview.url}
+                        className="h-24 w-full object-cover"
+                      />
+                    ) : (
+                      <img
+                        src={preview.url}
+                        alt={`Önizleme ${index + 1}`}
+                        className="h-24 w-full object-cover"
+                      />
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 truncate">
+                      {files[index].name}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSingleFile(index)}
+                      className="absolute top-2 right-2 bg-black/60 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-500 transition-colors shadow-md text-lg font-bold"
+                      title="Dosyayı kaldır"
+                      aria-label="Dosyayı kaldır"
+                    >
+                      ×
+                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleRemoveFile}
+                  className="inline-flex items-center px-4 py-2 text-sm bg-red-100 text-red-600 rounded-lg hover:bg-red-200 hover:text-red-700 transition-colors shadow-sm font-medium"
+                >
+                  <span className="mr-1">🗑️</span> Tüm seçimleri temizle
+                </button>
+              </div>
+            </>
           )}
 
           {/* Yükleme ilerleme durumu */}
