@@ -10,7 +10,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<{ url: string, isVideo: boolean }[]>([]);
+  const [previews, setPreviews] = useState<{ url: string, isVideo: boolean, size: number }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -27,7 +27,8 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
         const isVideoFile = file.type.startsWith('video/');
         return {
           url: URL.createObjectURL(file),
-          isVideo: isVideoFile
+          isVideo: isVideoFile,
+          size: file.size
         };
       });
 
@@ -93,6 +94,14 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
 
     if (!name.trim()) {
       setErrorMessage('Lütfen adınızı girin');
+      return;
+    }
+
+    // Dosya boyutu kontrol et
+    const oversizedFiles = files.filter(file => file.size > 10 * 1024 * 1024); // 10MB'dan büyük dosyaları bul
+    if (oversizedFiles.length > 0) {
+      const fileNames = oversizedFiles.map(file => file.name).join(', ');
+      setErrorMessage(`Bazı dosyalar çok büyük (${fileNames}). Lütfen her bir dosyanın 10MB'dan küçük olduğundan emin olun veya sıkıştırıp tekrar deneyin.`);
       return;
     }
 
@@ -229,7 +238,10 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
               (Desteklenen formatlar: jpg, jpeg, png, gif, mp4, webm, mov)
             </p>
             <p className="text-xs text-gray-400">
-              (Maksimum dosya boyutu: 60MB)
+              (Maksimum dosya boyutu: 10MB)
+            </p>
+            <p className="text-xs text-pink-600 mt-1">
+              İpucu: Yükleme başarısız olursa, fotoğrafınızı sıkıştırmayı deneyin
             </p>
             <input
               type="file"
@@ -262,6 +274,10 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({ albumId, onUploadSuccess }) =
                     )}
                     <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 truncate">
                       {files[index].name}
+                    </div>
+                    <div className={`absolute bottom-8 left-0 right-0 bg-black/50 text-xs p-1 text-center ${preview.size > 10 * 1024 * 1024 ? 'text-red-300' : 'text-white'}`}>
+                      {(preview.size / (1024 * 1024)).toFixed(2)} MB
+                      {preview.size > 10 * 1024 * 1024 && ' ⚠️'}
                     </div>
                     <button
                       type="button"
