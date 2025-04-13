@@ -1,236 +1,36 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
 import { Photo } from '../models/Photo';
-import { photoService } from '../services/photoService';
 import { TrashIcon } from '@heroicons/react/24/outline';
+import { photoService } from '../services/photoService';
 
 interface PhotoGridProps {
   photos: Photo[];
-  onPhotoDeleted?: () => void;
+  albumId: string;
+  onPhotoClick: (photo: Photo) => void;
+  onPhotosUpdated: (updatedPhotos: Photo[]) => void;
 }
 
-const PhotoGrid: React.FC<PhotoGridProps> = ({ photos, onPhotoDeleted }) => {
-  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
+const PhotoGrid: React.FC<PhotoGridProps> = ({
+  photos,
+  albumId,
+  onPhotoClick,
+  onPhotosUpdated
+}) => {
   const [confirmingPhotoId, setConfirmingPhotoId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [videoLoading, setVideoLoading] = useState(false);
-  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(-1);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const [isSwiping, setIsSwiping] = useState(false);
-  const [swipeOffset, setSwipeOffset] = useState(0);
+  const photosContainerRef = useRef<HTMLDivElement>(null);
 
-  // Swipe threshold - minimum distance required for a swipe
-  const minSwipeDistance = 50;
+  const scrollPhotos = (direction: 'left' | 'right') => {
+    if (!photosContainerRef.current) return;
 
-  const openModal = (photo: Photo) => {
-    // Doğrudan fotoğraf nesnesini kullan ve tıklanan fotoğraf için state'i güncelle
-    setSelectedPhoto(photo);
+    const scrollAmount = 320; // Bir kart genişliği + margin
+    const currentScroll = photosContainerRef.current.scrollLeft;
 
-    // İndeks kontrolü yap, ama ilk fotoğrafa tıklandığında açılmasını garanti et
-    const photoIndex = photos.findIndex(p => p._id === photo._id);
-    if (photoIndex !== -1) {
-      setSelectedPhotoIndex(photoIndex);
-    } else {
-      // Eğer bir şekilde indeks bulunmazsa, varsayılan olarak 0 kullan
-      console.warn('Fotoğraf indeksi bulunamadı:', photo._id);
-      setSelectedPhotoIndex(0);
-    }
-
-    // Video yükleme durumunu ayarla
-    if (photo.isVideo) {
-      setVideoLoading(true);
-    }
-  };
-
-  const closeModal = useCallback(() => {
-    setSelectedPhoto(null);
-    setVideoLoading(false);
-    setSelectedPhotoIndex(-1);
-  }, []);
-
-  const goToNextPhoto = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (selectedPhotoIndex < photos.length - 1) {
-      // Sonraki fotoğraf için sağdan sola geçiş efekti
-      setSwipeOffset(-5); // Sola doğru hafif bir başlangıç offseti
-
-      setTimeout(() => {
-        const nextIndex = selectedPhotoIndex + 1;
-        setSelectedPhotoIndex(nextIndex);
-        setSelectedPhoto(photos[nextIndex]);
-        if (photos[nextIndex].isVideo) {
-          setVideoLoading(true);
-        }
-        // Hemen sıfırla
-        setSwipeOffset(0);
-      }, 10);
-    }
-  };
-
-  const goToPreviousPhoto = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (selectedPhotoIndex > 0) {
-      // Önceki fotoğraf için soldan sağa geçiş efekti
-      setSwipeOffset(5); // Sağa doğru hafif bir başlangıç offseti
-
-      setTimeout(() => {
-        const prevIndex = selectedPhotoIndex - 1;
-        setSelectedPhotoIndex(prevIndex);
-        setSelectedPhoto(photos[prevIndex]);
-        if (photos[prevIndex].isVideo) {
-          setVideoLoading(true);
-        }
-        // Hemen sıfırla
-        setSwipeOffset(0);
-      }, 10);
-    }
-  };
-
-  const handleModalTouchStart = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-    setIsSwiping(true);
-  };
-
-  const handleModalTouchMove = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    if (!touchStart || !isSwiping) return;
-
-    const currentTouch = e.targetTouches[0].clientX;
-    setTouchEnd(currentTouch);
-
-    // Calculate how far we've swiped as a percentage of screen width
-    const screenWidth = window.innerWidth;
-    const dragOffset = currentTouch - touchStart;
-
-    // Ekran genişliğinin başına ve sonuna göre offset hesapla
-    // Bu sayede %100'ü tamamen doğal geçiş için ayırıyoruz
-    let offsetPercentage = (dragOffset / screenWidth) * 100;
-
-    // Sınırlar içinde kalmak için ayarla, ekran kenarları için direnç ekle
-    if ((selectedPhotoIndex === 0 && offsetPercentage > 0) ||
-      (selectedPhotoIndex === photos.length - 1 && offsetPercentage < 0)) {
-      // İlk veya son fotoğrafta daha zor hareket ettir (direnç ekle)
-      offsetPercentage = offsetPercentage / 3;
-    }
-
-    // Parmak pozisyonunu takip etmesi için offseti güncelle
-    setSwipeOffset(offsetPercentage);
-  };
-
-  const handleModalTouchEnd = (e: React.TouchEvent) => {
-    e.stopPropagation();
-
-    // Fotoğraf kaydırmada, eğer hiç hareket olmadıysa veya çok az olduysa
-    if (!touchStart || !touchEnd) {
-      setIsSwiping(false);
-      setSwipeOffset(0);
-      return;
-    }
-
-    // Kaydırma mesafesini hesapla (touchStart - touchEnd)
-    const swipeDistance = touchStart - touchEnd;
-
-    // Sola kaydırma (touchStart > touchEnd) - sonraki fotoğraf
-    if (swipeDistance > 5 && selectedPhotoIndex < photos.length - 1) {
-      goToNextPhoto();
-    }
-    // Sağa kaydırma (touchStart < touchEnd) - önceki fotoğraf
-    else if (swipeDistance < -5 && selectedPhotoIndex > 0) {
-      goToPreviousPhoto();
-    }
-    // Eğer yeterli mesafe kaydırılmadıysa veya sınırlardaysa sıfırla
-    else {
-      setSwipeOffset(0);
-    }
-
-    // Tüm touch ve swiping durumlarını sıfırla
-    setTouchStart(null);
-    setTouchEnd(null);
-    setIsSwiping(false);
-  };
-
-  // Doğal geçiş animasyonu
-  const animateToNextPhotoNaturally = (targetIndex: number, currentOffset: number) => {
-    const isNext = targetIndex > selectedPhotoIndex;
-    // Doğru animasyon yönünü ayarla: kaydırma yönü ile ters olmalı
-    // Sağa kaydırma (pozitif offset) için sola doğru git (-100)
-    // Sola kaydırma (negatif offset) için sağa doğru git (100)
-    const targetOffset = currentOffset > 0 ? -100 : 100;
-    const currentAbsOffset = Math.abs(currentOffset);
-
-    // Kalan mesafeye göre animasyon süresini ayarla (zaten kaydırılan mesafe için süreyi kısalt)
-    const progress = currentAbsOffset / 100; // Ne kadar ilerlediğimiz (0-1 arası)
-    const baseDuration = 300; // Temel animasyon süresi (ms)
-    const adjustedDuration = Math.round(baseDuration * (1 - progress)); // Kalan yol için süre
-
-    console.log(`Doğal geçiş: ${currentOffset} -> ${targetOffset}, süre: ${adjustedDuration}ms`);
-
-    // Animasyonu devam ettir
-    requestAnimationFrame(() => {
-      // Önce geçiş animasyonunu göster
-      const transitionStyle = `transform ${adjustedDuration}ms ease-out`;
-      const photoContainer = document.querySelector('.photo-grid-container') as HTMLElement;
-      if (photoContainer) {
-        photoContainer.style.transition = transitionStyle;
-      }
-
-      setSwipeOffset(targetOffset);
-
-      // Animasyon bittikten sonra fotoğrafı değiştir
-      setTimeout(() => {
-        setSelectedPhotoIndex(targetIndex);
-        setSelectedPhoto(photos[targetIndex]);
-
-        if (photos[targetIndex].isVideo) {
-          setVideoLoading(true);
-        }
-
-        // Konum sıfırla, ama animasyon gösterme
-        requestAnimationFrame(() => {
-          if (photoContainer) {
-            photoContainer.style.transition = 'none';
-          }
-          setSwipeOffset(0);
-        });
-      }, adjustedDuration);
+    photosContainerRef.current.scrollTo({
+      left: direction === 'left' ? currentScroll - scrollAmount : currentScroll + scrollAmount,
+      behavior: 'smooth'
     });
   };
-
-  const animateReset = () => {
-    requestAnimationFrame(() => {
-      setSwipeOffset(0);
-    });
-  };
-
-  const handleVideoLoad = () => {
-    setVideoLoading(false);
-  };
-
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (!selectedPhoto) return;
-
-    if (e.key === 'ArrowRight' && selectedPhotoIndex < photos.length - 1) {
-      // Sonraki fotoğraf
-      goToNextPhoto();
-    } else if (e.key === 'ArrowLeft' && selectedPhotoIndex > 0) {
-      // Önceki fotoğraf
-      goToPreviousPhoto();
-    } else if (e.key === 'Escape') {
-      closeModal();
-    }
-  }, [selectedPhoto, selectedPhotoIndex, photos, closeModal]);
-
-  // Add and remove event listener for keyboard navigation
-  useEffect(() => {
-    if (selectedPhoto) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [selectedPhoto, selectedPhotoIndex, photos, handleKeyDown]);
 
   const handleDeleteClick = (e: React.MouseEvent, photoId: string) => {
     e.stopPropagation();
@@ -249,198 +49,132 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({ photos, onPhotoDeleted }) => {
     try {
       setIsDeleting(true);
       await photoService.deletePhoto(photoId);
-      setConfirmingPhotoId(null);
 
-      // Silme başarılı olduğunda parent komponenti bilgilendir
-      if (onPhotoDeleted) {
-        onPhotoDeleted();
+      // Silme başarılı olduğunda fotoğrafları güncelle
+      if (albumId) {
+        const updatedPhotos = await photoService.getPhotosByAlbumId(albumId);
+        onPhotosUpdated(updatedPhotos);
       }
     } catch (error) {
       console.error('Error deleting photo:', error);
     } finally {
       setIsDeleting(false);
+      setConfirmingPhotoId(null);
     }
   };
 
   if (photos.length === 0) {
-    return <p className="text-center text-gray-600 mt-8 text-lg">Henüz fotoğraf yok. İlk fotoğrafı yükleyen siz olun!</p>;
+    return (
+      <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="text-5xl mb-4">📷</div>
+        <p className="text-gray-600 text-lg font-light">
+          Henüz fotoğraf yok.
+        </p>
+        <p className="text-gray-500 mt-2">
+          İlk fotoğrafı yükleyen siz olun!
+        </p>
+      </div>
+    );
   }
 
   return (
-    <>
-      <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-8">
-        {photos.map((photo) => (
-          <div
-            key={photo._id}
-            className="relative bg-white rounded-lg overflow-hidden shadow-md hover:-translate-y-1 transition-transform duration-200 hover:shadow-lg h-full"
-          >
+    <div className="relative max-w-6xl mx-auto">
+      <div className="overflow-x-auto pb-6 hide-scrollbar" ref={photosContainerRef}>
+        <div className="flex gap-5 px-2 snap-x snap-mandatory">
+          {photos.map((photo) => (
             <div
-              className="cursor-pointer"
-              onClick={() => openModal(photo)}
+              key={photo._id}
+              className="bg-white rounded-xl overflow-hidden shadow-md hover:-translate-y-1 transition-all duration-300 hover:shadow-lg relative flex-shrink-0 w-64 snap-start h-full border border-gray-100"
             >
-              {photo.isVideo ? (
-                <div className="relative w-full h-40 bg-gray-100">
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="bg-white/90 rounded-full p-1">
-                      <div className="bg-pink-500 text-white rounded-full w-14 h-14 flex items-center justify-center">
-                        <span className="text-2xl ml-1">▶</span>
+              <div className="cursor-pointer" onClick={() => onPhotoClick(photo)}>
+                {photo.isVideo ? (
+                  <div className="relative w-full h-44 bg-gray-50 overflow-hidden">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+                      <div className="bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-lg transition-transform duration-300 hover:scale-110">
+                        <div className="bg-gradient-to-br from-pink-400 to-pink-600 text-white rounded-full w-12 h-12 flex items-center justify-center">
+                          <span className="text-xl ml-1">▶</span>
+                        </div>
                       </div>
                     </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-0"></div>
+                    <div className="absolute top-2 left-2 bg-pink-500 text-white text-xs font-medium px-2 py-1 rounded-full z-10">
+                      Video
+                    </div>
                   </div>
+                ) : (
+                  <div className="relative w-full h-44 overflow-hidden">
+                    <img
+                      src={photo.imagePath}
+                      alt={photo.title}
+                      className="w-full h-full object-cover transition-transform duration-700 hover:scale-110"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                  </div>
+                )}
+              </div>
+
+              {confirmingPhotoId === photo._id ? (
+                <div className="absolute top-2 right-2 flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md z-20">
+                  <span className="text-xs text-gray-800">Emin misiniz?</span>
+                  <button
+                    onClick={(e) => confirmDelete(e, photo._id || '')}
+                    disabled={isDeleting}
+                    className="text-red-500 text-xs font-bold hover:text-red-700"
+                  >
+                    {isDeleting ? '...' : 'Evet'}
+                  </button>
+                  <span className="text-gray-400">|</span>
+                  <button
+                    onClick={cancelDelete}
+                    className="text-gray-600 text-xs font-bold hover:text-gray-800"
+                  >
+                    Hayır
+                  </button>
                 </div>
               ) : (
-                <img
-                  src={photo.imagePath}
-                  alt={photo.title}
-                  className="w-full h-40 object-cover"
-                />
-              )}
-            </div>
-
-            {confirmingPhotoId === photo._id ? (
-              <div className="absolute top-2 right-2 flex items-center gap-2 bg-white/90 px-2 py-1 rounded-md shadow-md">
-                <span className="text-xs text-gray-800">Emin misiniz?</span>
                 <button
-                  onClick={(e) => confirmDelete(e, photo._id || '')}
-                  disabled={isDeleting}
-                  className="text-red-500 text-xs font-bold hover:text-red-700"
+                  onClick={(e) => handleDeleteClick(e, photo._id || '')}
+                  className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm text-red-500 w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-white hover:text-red-600 transition-all duration-200 z-10"
+                  aria-label="Fotoğrafı sil"
                 >
-                  {isDeleting ? '...' : 'Evet'}
+                  <TrashIcon className="w-4 h-4" />
                 </button>
-                <span className="text-gray-400">|</span>
-                <button
-                  onClick={cancelDelete}
-                  className="text-gray-600 text-xs font-bold hover:text-gray-800"
-                >
-                  Hayır
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={(e) => handleDeleteClick(e, photo._id || '')}
-                className="absolute top-2 right-2 bg-red-500 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition-all duration-200"
-                aria-label="Fotoğrafı sil"
-              >
-                <TrashIcon className="w-5 h-5" />
-              </button>
-            )}
-
-            <div className="p-3">
-              <div className="flex items-center gap-2 mb-1">
-                {photo.isVideo && (
-                  <span className="bg-pink-100 text-pink-600 text-xs px-2 py-0.5 rounded-full font-medium">Video</span>
-                )}
-                <h3 className="text-sm font-medium text-gray-800 truncate">{photo.title}</h3>
-              </div>
-              {photo.caption && (
-                <p className="text-xs text-gray-500 line-clamp-2">{photo.caption}</p>
               )}
-              <p className="text-xs text-gray-400 italic mt-1">Yükleyen: {photo.name}</p>
-            </div>
-          </div>
-        ))}
-      </div>
 
-      {/* Modal */}
-      {selectedPhoto && (
-        <div
-          className="fixed inset-0 bg-black flex justify-center items-center z-50"
-          onClick={closeModal}
-        >
-          <div
-            className="relative w-full h-full flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={handleModalTouchStart}
-            onTouchMove={handleModalTouchMove}
-            onTouchEnd={handleModalTouchEnd}
-          >
-            <button
-              onClick={closeModal}
-              className="absolute top-4 right-4 bg-black/60 text-white w-14 h-14 rounded-full flex items-center justify-center text-3xl font-bold z-10 hover:bg-black/80 transition-colors backdrop-blur-sm"
-            >
-              ×
-            </button>
-
-            <a
-              href={selectedPhoto.imagePath}
-              download={`${selectedPhoto.title}.${selectedPhoto.isVideo ? 'mp4' : 'jpg'}`}
-              className="absolute top-4 left-4 bg-black/40 text-white w-10 h-10 rounded-full flex items-center justify-center z-10 hover:bg-black/60 transition-colors backdrop-blur-sm"
-              title="İndir"
-              onClick={(e) => e.stopPropagation()}
-            >
-              ⬇️
-            </a>
-
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/40 text-white px-3 py-1 rounded-full z-10 text-sm font-medium backdrop-blur-sm">
-              {selectedPhotoIndex + 1} / {photos.length}
-            </div>
-
-            {videoLoading && selectedPhoto.isVideo && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-[5]">
-                <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
-
-            <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/60 to-transparent h-24 z-[1] pointer-events-none"></div>
-
-            <div className="flex-grow flex items-center justify-center bg-black w-full overflow-hidden">
-              <div
-                className="flex transition-transform duration-300 ease-out w-full h-full photo-grid-container"
-                style={{
-                  transform: `translateX(calc(${swipeOffset}%))`,
-                  width: '100%',
-                  height: '100%',
-                  willChange: 'transform',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  transition: swipeOffset === 0 ? 'transform 0.3s ease' : 'none'
-                }}
-              >
-                {/* Current Photo */}
-                <div className="flex-shrink-0 w-full h-full flex items-center justify-center">
-                  {selectedPhoto.isVideo ? (
-                    <video
-                      src={selectedPhoto.imagePath}
-                      className="max-w-full max-h-screen mx-auto"
-                      controls
-                      autoPlay
-                      onLoadedData={handleVideoLoad}
-                      onError={() => setVideoLoading(false)}
-                    />
-                  ) : (
-                    <img
-                      src={selectedPhoto.imagePath}
-                      alt={selectedPhoto.title}
-                      className="max-w-full max-h-screen w-full h-full object-contain"
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent h-24 z-[1]">
-              <div className="absolute bottom-12 left-4 text-white max-w-[80%]">
-                <h3 className="text-lg font-medium">
-                  {selectedPhoto.isVideo && (
-                    <span className="inline-block bg-pink-500 text-white text-xs font-semibold mr-2 px-2 py-0.5 rounded">
-                      Video
-                    </span>
-                  )}
-                  {selectedPhoto.title}
+              <div className="p-4">
+                <h3 className="text-sm font-medium text-gray-800 truncate">
+                  {photo.title}
                 </h3>
-                {selectedPhoto.caption && (
-                  <p className="text-sm text-white/90 mt-1 line-clamp-2">{selectedPhoto.caption}</p>
-                )}
-                <p className="text-sm text-white/70 mt-1">
-                  Yükleyen: {selectedPhoto.name}
+                <p className="text-gray-500 text-xs mt-1 flex items-center">
+                  <span className="text-[10px] mr-1">👤</span>
+                  {photo.name}
                 </p>
               </div>
             </div>
-          </div>
+          ))}
         </div>
-      )}
-    </>
+      </div>
+
+      {/* Navigation arrows with improved styling */}
+      <div className="absolute left-0 top-1/2 -translate-y-1/2 hidden md:block">
+        <button
+          className="bg-white/80 backdrop-blur-sm hover:bg-white text-gray-800 w-10 h-10 rounded-full shadow-md flex items-center justify-center border border-gray-100 hover:scale-110 transition-transform duration-200"
+          onClick={() => scrollPhotos('left')}
+          aria-label="Önceki fotoğraflar"
+        >
+          ❮
+        </button>
+      </div>
+      <div className="absolute right-0 top-1/2 -translate-y-1/2 hidden md:block">
+        <button
+          className="bg-white/80 backdrop-blur-sm hover:bg-white text-gray-800 w-10 h-10 rounded-full shadow-md flex items-center justify-center border border-gray-100 hover:scale-110 transition-transform duration-200"
+          onClick={() => scrollPhotos('right')}
+          aria-label="Sonraki fotoğraflar"
+        >
+          ❯
+        </button>
+      </div>
+    </div>
   );
 };
 
